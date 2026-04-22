@@ -130,24 +130,138 @@ st.markdown("""
 
 
 # ─────────────────────────────────────────────
-# Données : liste des pays
+# Liste des pays
 # ─────────────────────────────────────────────
 COUNTRY_MAPPING = {
-    "timor_leste": {
-        "name": "Timor-Leste",
-        "freedom_house_slug": "timor-leste",
-        "world_bank_code": "TLS"
-    },
-    "france": {
-        "name": "France",
-        "freedom_house_slug": "france",
-        "world_bank_code": "FRA"
-    }
+    "afghanistan": {"name": "Afghanistan", "freedom_house_slug": "afghanistan", "world_bank_code": "AFG"},
+    "afrique_du_sud": {"name": "Afrique du Sud", "freedom_house_slug": "south-africa", "world_bank_code": "ZAF"},
+    "albanie": {"name": "Albanie", "freedom_house_slug": "albania", "world_bank_code": "ALB"},
+    "algerie": {"name": "Algérie", "freedom_house_slug": "algeria", "world_bank_code": "DZA"},
+    "angola": {"name": "Angola", "freedom_house_slug": "angola", "world_bank_code": "AGO"},
+    "antigua_et_barbuda": {"name": "Antigua et Barbuda", "freedom_house_slug": "antigua-and-barbuda", "world_bank_code": "ATG"},
+    "argentine": {"name": "Argentine", "freedom_house_slug": "argentina", "world_bank_code": "ARG"},
+    "armenie": {"name": "Arménie", "freedom_house_slug": "armenia", "world_bank_code": "ARM"},
+    "azerbaijan": {"name": "Azerbaïdjan", "freedom_house_slug": "azerbaijan", "world_bank_code": "AZE"},
+    "bangladesh": {"name": "Bangladesh", "freedom_house_slug": "bangladesh", "world_bank_code": "BGD"},
+    "belize": {"name": "Belize", "freedom_house_slug": "belize", "world_bank_code": "BLZ"},
+    "benin": {"name": "Bénin", "freedom_house_slug": "benin", "world_bank_code": "BEN"},
+    "bhoutan": {"name": "Bhoutan", "freedom_house_slug": "bhutan", "world_bank_code": "BTN"},
+    "bielorussie": {"name": "Biélorussie", "freedom_house_slug": "belarus", "world_bank_code": "BLR"},
+    "birmanie": {"name": "Birmanie (Myanmar)", "freedom_house_slug": "myanmar", "world_bank_code": "MMR"},
+    "bolivie": {"name": "Bolivie", "freedom_house_slug": "bolivia", "world_bank_code": "BOL"},
+    "bosnie_herzegovine": {"name": "Bosnie-Herzégovine", "freedom_house_slug": "bosnia-and-herzegovina", "world_bank_code": "BIH"},
+    "botswana": {"name": "Botswana", "freedom_house_slug": "botswana", "world_bank_code": "BWA"},
+    "bresil": {"name": "Brésil", "freedom_house_slug": "brazil", "world_bank_code": "BRA"},
+    "burkina_faso": {"name": "Burkina Faso", "freedom_house_slug": "burkina-faso", "world_bank_code": "BFA"},
+    "burundi": {"name": "Burundi", "freedom_house_slug": "burundi", "world_bank_code": "BDI"},
+    "cambodge": {"name": "Cambodge", "freedom_house_slug": "cambodia", "world_bank_code": "KHM"},
+    "cameroun": {"name": "Cameroun", "freedom_house_slug": "cameroon", "world_bank_code": "CMR"},
+    "cap_vert": {"name": "Cap-Vert", "freedom_house_slug": "cape-verde", "world_bank_code": "CPV"},
+    "chili": {"name": "Chili", "freedom_house_slug": "chile", "world_bank_code": "CHL"},
+    "chine": {"name": "Chine", "freedom_house_slug": "china", "world_bank_code": "CHN"},
+    "colombie": {"name": "Colombie", "freedom_house_slug": "colombia", "world_bank_code": "COL"},
+    "comores": {"name": "Comores", "freedom_house_slug": "comoros", "world_bank_code": "COM"},
+    "congo": {"name": "Congo (Brazzaville)", "freedom_house_slug": "republic-of-congo", "world_bank_code": "COG"},
+    "costa_rica": {"name": "Costa Rica", "freedom_house_slug": "costa-rica", "world_bank_code": "CRI"},
+    "cote_ivoire": {"name": "Côte d'Ivoire", "freedom_house_slug": "cote-divoire", "world_bank_code": "CIV"},
+    "cuba": {"name": "Cuba", "freedom_house_slug": "cuba", "world_bank_code": "CUB"},
+    "djibouti": {"name": "Djibouti", "freedom_house_slug": "djibouti", "world_bank_code": "DJI"},
+    "dominique": {"name": "Dominique", "freedom_house_slug": "dominica", "world_bank_code": "DMA"},
+    "egypte": {"name": "Égypte", "freedom_house_slug": "egypt", "world_bank_code": "EGY"},
+    "equateur": {"name": "Équateur", "freedom_house_slug": "ecuador", "world_bank_code": "ECU"},
+    "erythree": {"name": "Érythrée", "freedom_house_slug": "eritrea", "world_bank_code": "ERI"},
+    "eswatini": {"name": "Eswatini", "freedom_house_slug": "eswatini", "world_bank_code": "SWZ"},
+    "ethiopie": {"name": "Éthiopie", "freedom_house_slug": "ethiopia", "world_bank_code": "ETH"},
+    "fidji": {"name": "Fidji", "freedom_house_slug": "fiji", "world_bank_code": "FJI"},
+    "gabon": {"name": "Gabon", "freedom_house_slug": "gabon", "world_bank_code": "GAB"},
+    "gambie": {"name": "Gambie", "freedom_house_slug": "gambia", "world_bank_code": "GMB"},
+    "georgie": {"name": "Géorgie", "freedom_house_slug": "georgia", "world_bank_code": "GEO"},
+    "ghana": {"name": "Ghana", "freedom_house_slug": "ghana", "world_bank_code": "GHA"},
+    "grenade": {"name": "Grenade", "freedom_house_slug": "grenada", "world_bank_code": "GRD"},
+    "guatemala": {"name": "Guatemala", "freedom_house_slug": "guatemala", "world_bank_code": "GTM"},
+    "guinee": {"name": "Guinée", "freedom_house_slug": "guinea", "world_bank_code": "GIN"},
+    "guinee_bissau": {"name": "Guinée-Bissau", "freedom_house_slug": "guinea-bissau", "world_bank_code": "GNB"},
+    "guinee_equatoriale": {"name": "Guinée équatoriale", "freedom_house_slug": "equatorial-guinea", "world_bank_code": "GNQ"},
+    "guyana": {"name": "Guyana", "freedom_house_slug": "guyana", "world_bank_code": "GUY"},
+    "haiti": {"name": "Haïti", "freedom_house_slug": "haiti", "world_bank_code": "HTI"},
+    "honduras": {"name": "Honduras", "freedom_house_slug": "honduras", "world_bank_code": "HND"},
+    "iles_salomon": {"name": "Îles Salomon", "freedom_house_slug": "solomon-islands", "world_bank_code": "SLB"},
+    "inde": {"name": "Inde", "freedom_house_slug": "india", "world_bank_code": "IND"},
+    "indonesie": {"name": "Indonésie", "freedom_house_slug": "indonesia", "world_bank_code": "IDN"},
+    "irak": {"name": "Irak", "freedom_house_slug": "iraq", "world_bank_code": "IRQ"},
+    "jamaique": {"name": "Jamaïque", "freedom_house_slug": "jamaica", "world_bank_code": "JAM"},
+    "jordanie": {"name": "Jordanie", "freedom_house_slug": "jordan", "world_bank_code": "JOR"},
+    "kazakhstan": {"name": "Kazakhstan", "freedom_house_slug": "kazakhstan", "world_bank_code": "KAZ"},
+    "kenya": {"name": "Kenya", "freedom_house_slug": "kenya", "world_bank_code": "KEN"},
+    "kirghizistan": {"name": "Kirghizistan", "freedom_house_slug": "kyrgyzstan", "world_bank_code": "KGZ"},
+    "kosovo": {"name": "Kosovo", "freedom_house_slug": "kosovo", "world_bank_code": "XKX"},
+    "laos": {"name": "Laos", "freedom_house_slug": "laos", "world_bank_code": "LAO"},
+    "lesotho": {"name": "Lesotho", "freedom_house_slug": "lesotho", "world_bank_code": "LSO"},
+    "liban": {"name": "Liban", "freedom_house_slug": "lebanon", "world_bank_code": "LBN"},
+    "liberia": {"name": "Libéria", "freedom_house_slug": "liberia", "world_bank_code": "LBR"},
+    "libye": {"name": "Libye", "freedom_house_slug": "libya", "world_bank_code": "LBY"},
+    "macedoine_du_nord": {"name": "Macédoine du Nord", "freedom_house_slug": "north-macedonia", "world_bank_code": "MKD"},
+    "madagascar": {"name": "Madagascar", "freedom_house_slug": "madagascar", "world_bank_code": "MDG"},
+    "malawi": {"name": "Malawi", "freedom_house_slug": "malawi", "world_bank_code": "MWI"},
+    "maldives": {"name": "Maldives", "freedom_house_slug": "maldives", "world_bank_code": "MDV"},
+    "mali": {"name": "Mali", "freedom_house_slug": "mali", "world_bank_code": "MLI"},
+    "maroc": {"name": "Maroc", "freedom_house_slug": "morocco", "world_bank_code": "MAR"},
+    "maurice": {"name": "Maurice", "freedom_house_slug": "mauritius", "world_bank_code": "MUS"},
+    "mauritanie": {"name": "Mauritanie", "freedom_house_slug": "mauritania", "world_bank_code": "MRT"},
+    "mexique": {"name": "Mexique", "freedom_house_slug": "mexico", "world_bank_code": "MEX"},
+    "moldavie": {"name": "Moldavie", "freedom_house_slug": "moldova", "world_bank_code": "MDA"},
+    "mongolie": {"name": "Mongolie", "freedom_house_slug": "mongolia", "world_bank_code": "MNG"},
+    "montenegro": {"name": "Monténégro", "freedom_house_slug": "montenegro", "world_bank_code": "MNE"},
+    "mozambique": {"name": "Mozambique", "freedom_house_slug": "mozambique", "world_bank_code": "MOZ"},
+    "namibie": {"name": "Namibie", "freedom_house_slug": "namibia", "world_bank_code": "NAM"},
+    "nepal": {"name": "Népal", "freedom_house_slug": "nepal", "world_bank_code": "NPL"},
+    "nicaragua": {"name": "Nicaragua", "freedom_house_slug": "nicaragua", "world_bank_code": "NIC"},
+    "niger": {"name": "Niger", "freedom_house_slug": "niger", "world_bank_code": "NER"},
+    "nigeria": {"name": "Nigéria", "freedom_house_slug": "nigeria", "world_bank_code": "NGA"},
+    "ouganda": {"name": "Ouganda", "freedom_house_slug": "uganda", "world_bank_code": "UGA"},
+    "ouzbekistan": {"name": "Ouzbékistan", "freedom_house_slug": "uzbekistan", "world_bank_code": "UZB"},
+    "pakistan": {"name": "Pakistan", "freedom_house_slug": "pakistan", "world_bank_code": "PAK"},
+    "panama": {"name": "Panama", "freedom_house_slug": "panama", "world_bank_code": "PAN"},
+    "paraguay": {"name": "Paraguay", "freedom_house_slug": "paraguay", "world_bank_code": "PRY"},
+    "perou": {"name": "Pérou", "freedom_house_slug": "peru", "world_bank_code": "PER"},
+    "philippines": {"name": "Philippines", "freedom_house_slug": "philippines", "world_bank_code": "PHL"},
+    "rdc": {"name": "RDC (Congo-Kinshasa)", "freedom_house_slug": "democratic-republic-of-congo", "world_bank_code": "COD"},
+    "republique_dominicaine": {"name": "République dominicaine", "freedom_house_slug": "dominican-republic", "world_bank_code": "DOM"},
+    "rwanda": {"name": "Rwanda", "freedom_house_slug": "rwanda", "world_bank_code": "RWA"},
+    "sainte_lucie": {"name": "Sainte-Lucie", "freedom_house_slug": "saint-lucia", "world_bank_code": "LCA"},
+    "saint_vincent": {"name": "Saint-Vincent-et-les-Grenadines", "freedom_house_slug": "saint-vincent-and-the-grenadines", "world_bank_code": "VCT"},
+    "salvador": {"name": "Salvador", "freedom_house_slug": "el-salvador", "world_bank_code": "SLV"},
+    "samoa": {"name": "Samoa", "freedom_house_slug": "samoa", "world_bank_code": "WSM"},
+    "sao_tome": {"name": "Sao Tomé-et-Principe", "freedom_house_slug": "sao-tome-and-principe", "world_bank_code": "STP"},
+    "senegal": {"name": "Sénégal", "freedom_house_slug": "senegal", "world_bank_code": "SEN"},
+    "serbie": {"name": "Serbie", "freedom_house_slug": "serbia", "world_bank_code": "SRB"},
+    "seychelles": {"name": "Seychelles", "freedom_house_slug": "seychelles", "world_bank_code": "SYC"},
+    "sierra_leone": {"name": "Sierra Leone", "freedom_house_slug": "sierra-leone", "world_bank_code": "SLE"},
+    "somalie": {"name": "Somalie", "freedom_house_slug": "somalia", "world_bank_code": "SOM"},
+    "soudan": {"name": "Soudan", "freedom_house_slug": "sudan", "world_bank_code": "SDN"},
+    "sri_lanka": {"name": "Sri Lanka", "freedom_house_slug": "sri-lanka", "world_bank_code": "LKA"},
+    "suriname": {"name": "Suriname", "freedom_house_slug": "suriname", "world_bank_code": "SUR"},
+    "syrie": {"name": "Syrie", "freedom_house_slug": "syria", "world_bank_code": "SYR"},
+    "tadjikistan": {"name": "Tadjikistan", "freedom_house_slug": "tajikistan", "world_bank_code": "TJK"},
+    "tanzanie": {"name": "Tanzanie", "freedom_house_slug": "tanzania", "world_bank_code": "TZA"},
+    "tchad": {"name": "Tchad", "freedom_house_slug": "chad", "world_bank_code": "TCD"},
+    "thailande": {"name": "Thaïlande", "freedom_house_slug": "thailand", "world_bank_code": "THA"},
+    "timor_leste": {"name": "Timor-Leste", "freedom_house_slug": "timor-leste", "world_bank_code": "TLS"},
+    "togo": {"name": "Togo", "freedom_house_slug": "togo", "world_bank_code": "TGO"},
+    "tunisie": {"name": "Tunisie", "freedom_house_slug": "tunisia", "world_bank_code": "TUN"},
+    "turquie": {"name": "Turquie", "freedom_house_slug": "turkey", "world_bank_code": "TUR"},
+    "ukraine": {"name": "Ukraine", "freedom_house_slug": "ukraine", "world_bank_code": "UKR"},
+    "uruguay": {"name": "Uruguay", "freedom_house_slug": "uruguay", "world_bank_code": "URY"},
+    "vanuatu": {"name": "Vanuatu", "freedom_house_slug": "vanuatu", "world_bank_code": "VUT"},
+    "vietnam": {"name": "Vietnam", "freedom_house_slug": "vietnam", "world_bank_code": "VNM"},
+    "yemen": {"name": "Yémen", "freedom_house_slug": "yemen", "world_bank_code": "YEM"},
+    "zambie": {"name": "Zambie", "freedom_house_slug": "zambia", "world_bank_code": "ZMB"},
+    "zimbabwe": {"name": "Zimbabwe", "freedom_house_slug": "zimbabwe", "world_bank_code": "ZWE"},
 }
 
 
 # ─────────────────────────────────────────────
-# Fonctions de récupération (votre code original)
+# Fonctions de récupération
 # ─────────────────────────────────────────────
 def fetch_freedom_house(country_slug, year=2026):
     url = f"https://freedomhouse.org/country/{country_slug}/freedom-world/{year}"
@@ -159,14 +273,9 @@ def fetch_freedom_house(country_slug, year=2026):
         text = re.sub(r"\s+", " ", text)
 
         result = {
-            "country": None,
-            "status": None,
-            "score": None,
-            "pr_score": None,
-            "cl_score": None,
-            "year": year,
-            "url": url,
-            "error": None
+            "country": None, "status": None, "score": None,
+            "pr_score": None, "cl_score": None,
+            "year": year, "url": url, "error": None
         }
 
         if soup.title and soup.title.string:
@@ -220,11 +329,7 @@ def fetch_world_bank_data(country_code):
     population = fetch_world_bank_indicator(country_code, "SP.POP.TOTL")
     gini = fetch_world_bank_indicator(country_code, "SI.POV.GINI")
     gdp = fetch_world_bank_indicator(country_code, "NY.GDP.PCAP.CD")
-    return {
-        "population": population,
-        "gini": gini,
-        "gdp_per_capita": gdp
-    }
+    return {"population": population, "gini": gini, "gdp_per_capita": gdp}
 
 
 # ─────────────────────────────────────────────
@@ -243,12 +348,12 @@ def render_metric(label, value, sub=None):
 
 def render_status_badge(status):
     if status == "Free":
-        return f'<span class="status-badge badge-free">● Free</span>'
+        return '<span class="status-badge badge-free">● Free</span>'
     elif status == "Partly Free":
-        return f'<span class="status-badge badge-partly">● Partly Free</span>'
+        return '<span class="status-badge badge-partly">● Partly Free</span>'
     elif status == "Not Free":
-        return f'<span class="status-badge badge-notfree">● Not Free</span>'
-    return f'<span class="status-badge" style="background:#222;color:#888;">Unknown</span>'
+        return '<span class="status-badge badge-notfree">● Not Free</span>'
+    return '<span class="status-badge" style="background:#222;color:#888;">Unknown</span>'
 
 
 def format_population(value):
@@ -269,12 +374,14 @@ st.markdown("# 🌍 Country Data Explorer")
 st.markdown('<p style="color:#555; font-size:15px; margin-top:-8px;">Données politiques et économiques par pays</p>', unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Sélecteur de pays
-country_options = {info["name"]: key for key, info in COUNTRY_MAPPING.items()}
+# Sélecteur de pays (trié alphabétiquement)
+country_options = dict(sorted(
+    {info["name"]: key for key, info in COUNTRY_MAPPING.items()}.items()
+))
 selected_name = st.selectbox("Sélectionner un pays", options=list(country_options.keys()))
 selected_key = country_options[selected_name]
 
-st.write("")  # espace
+st.write("")
 
 if st.button("Récupérer les données →"):
 
@@ -334,19 +441,11 @@ if st.button("Récupérer les données →"):
         with col6:
             gdp = wb.get("gdp_per_capita")
             gdp_val = f"${gdp['value']:,.0f}" if gdp and gdp["value"] else "N/A"
-            render_metric(
-                "PIB / habitant",
-                gdp_val,
-                f"Année {gdp['year']}" if gdp else ""
-            )
+            render_metric("PIB / habitant", gdp_val, f"Année {gdp['year']}" if gdp else "")
         with col7:
             gini = wb.get("gini")
             gini_val = f"{gini['value']:.1f}" if gini and gini["value"] else "N/A"
-            render_metric(
-                "Indice de Gini",
-                gini_val,
-                f"Année {gini['year']}" if gini else ""
-            )
+            render_metric("Indice de Gini", gini_val, f"Année {gini['year']}" if gini else "")
 
         wb_url = f"https://data.worldbank.org/country/{country_info['world_bank_code']}"
         st.markdown(f'<p style="font-size:11px;color:#444;margin-top:4px;">Source : <a href="{wb_url}" style="color:#555">{wb_url}</a></p>', unsafe_allow_html=True)
