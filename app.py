@@ -250,7 +250,8 @@ VDEM_LABELS = {
 @st.cache_data
 def load_vdem():
     try:
-        return pd.read_csv("vdem_data.csv")
+       import os
+return pd.read_csv(os.path.join(os.path.dirname(__file__), "vdem_data.csv"))
     except Exception:
         return None
 
