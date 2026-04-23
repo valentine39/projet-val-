@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import re
+import pandas as pd
 
 # ─────────────────────────────────────────────
 # Configuration de la page
@@ -18,21 +19,9 @@ st.set_page_config(
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap');
-
-    html, body, [class*="css"] {
-        font-family: 'DM Sans', sans-serif;
-    }
-
-    h1, h2, h3 {
-        font-family: 'Syne', sans-serif;
-    }
-
-    .main { background-color: #0f0f0f; }
-
-    .stApp {
-        background-color: #0f0f0f;
-        color: #f0ede6;
-    }
+    html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
+    h1, h2, h3 { font-family: 'Syne', sans-serif; }
+    .stApp { background-color: #0f0f0f; color: #f0ede6; }
 
     .metric-card {
         background: #1a1a1a;
@@ -41,7 +30,6 @@ st.markdown("""
         padding: 20px 24px;
         margin-bottom: 12px;
     }
-
     .metric-label {
         font-size: 11px;
         letter-spacing: 0.12em;
@@ -49,19 +37,17 @@ st.markdown("""
         color: #888;
         margin-bottom: 6px;
     }
-
     .metric-value {
         font-family: 'Syne', sans-serif;
         font-size: 28px;
         font-weight: 700;
         color: #f0ede6;
     }
+    .metric-sub { font-size: 12px; color: #555; margin-top: 4px; }
 
-    .metric-sub {
-        font-size: 12px;
-        color: #555;
-        margin-top: 4px;
-    }
+    .trend-up   { color: #4caf7d; font-size: 18px; }
+    .trend-down { color: #e05555; font-size: 18px; }
+    .trend-flat { color: #888;    font-size: 18px; }
 
     .source-header {
         font-family: 'Syne', sans-serif;
@@ -73,7 +59,6 @@ st.markdown("""
         padding-bottom: 10px;
         margin: 28px 0 16px 0;
     }
-
     .status-badge {
         display: inline-block;
         padding: 3px 10px;
@@ -82,9 +67,8 @@ st.markdown("""
         font-weight: 500;
         letter-spacing: 0.05em;
     }
-
-    .badge-free { background: #1a3a2a; color: #4caf7d; }
-    .badge-partly { background: #3a2a0a; color: #f0a500; }
+    .badge-free    { background: #1a3a2a; color: #4caf7d; }
+    .badge-partly  { background: #3a2a0a; color: #f0a500; }
     .badge-notfree { background: #3a0a0a; color: #e05555; }
 
     .error-box {
@@ -95,7 +79,6 @@ st.markdown("""
         color: #e05555;
         font-size: 14px;
     }
-
     div[data-testid="stButton"] button {
         background: #f0ede6;
         color: #0f0f0f;
@@ -107,31 +90,20 @@ st.markdown("""
         border-radius: 8px;
         padding: 12px 32px;
         width: 100%;
-        cursor: pointer;
-        transition: opacity 0.2s;
     }
-
-    div[data-testid="stButton"] button:hover {
-        opacity: 0.85;
-    }
-
     div[data-testid="stSelectbox"] label {
         color: #888;
         font-size: 11px;
         letter-spacing: 0.1em;
         text-transform: uppercase;
     }
-
-    .title-block {
-        margin-bottom: 40px;
-    }
+    .title-block { margin-bottom: 40px; }
 </style>
 """, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
 # Liste des pays
-# Chaque pays a : nom affiché, slug Freedom House, code ISO-3 Banque Mondiale, code ISO-2 pour l'URL
 # ─────────────────────────────────────────────
 COUNTRY_MAPPING = {
     "afghanistan": {"name": "Afghanistan", "freedom_house_slug": "afghanistan", "world_bank_code": "AFG", "wb_url_code": "AF"},
@@ -260,35 +232,49 @@ COUNTRY_MAPPING = {
     "zimbabwe": {"name": "Zimbabwe", "freedom_house_slug": "zimbabwe", "world_bank_code": "ZWE", "wb_url_code": "ZW"},
 }
 
+# ─────────────────────────────────────────────
+# Chargement V-Dem (une seule fois au démarrage)
+# ─────────────────────────────────────────────
+VDEM_LABELS = {
+    "v2x_polyarchy":      "Démocratie électorale",
+    "v2x_libdem":         "Démocratie libérale",
+    "v2x_partipdem":      "Démocratie participative",
+    "v2x_egaldem":        "Démocratie égalitaire",
+    "v2x_freexp_altinf":  "Liberté d'expression",
+    "v2x_frassoc_thick":  "Liberté d'association",
+    "v2x_cspart":         "Participation société civile",
+    "v2x_corr":           "Corruption (index)",
+    "v2x_rule":           "État de droit",
+}
+
+@st.cache_data
+def load_vdem():
+    try:
+        return pd.read_csv("vdem_data.csv")
+    except Exception:
+        return None
+
 
 # ─────────────────────────────────────────────
-# Fonctions de récupération
+# Fonctions Freedom House
 # ─────────────────────────────────────────────
 def fetch_freedom_house(country_slug, year=2026):
     url = f"https://freedomhouse.org/country/{country_slug}/freedom-world/{year}"
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         response = requests.get(url, timeout=30, headers=headers)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
-        text = soup.get_text(" ", strip=True)
-        text = re.sub(r"\s+", " ", text)
+        text = re.sub(r"\s+", " ", soup.get_text(" ", strip=True))
 
-        result = {
-            "country": None, "status": None, "score": None,
-            "pr_score": None, "cl_score": None,
-            "year": year, "url": url, "error": None
-        }
+        result = {"country": None, "status": None, "score": None,
+                  "pr_score": None, "cl_score": None, "year": year, "url": url, "error": None}
 
-        if soup.title and soup.title.string:
-            result["country"] = soup.title.string.split(":")[0].strip()
-        else:
-            result["country"] = country_slug.replace("-", " ").title()
+        result["country"] = (soup.title.string.split(":")[0].strip()
+                             if soup.title and soup.title.string
+                             else country_slug.replace("-", " ").title())
 
-        # ⚠️ CORRECTION BUG : chercher "Not Free" et "Partly Free" AVANT "Free"
-        # sinon "Free" matche à l'intérieur de "Not Free" et "Partly Free"
+        # Chercher dans l'ordre du plus long au plus court pour éviter le faux-positif "Free"
         if re.search(r"\bNot Free\b", text):
             result["status"] = "Not Free"
         elif re.search(r"\bPartly Free\b", text):
@@ -296,49 +282,62 @@ def fetch_freedom_house(country_slug, year=2026):
         elif re.search(r"\bFree\b", text):
             result["status"] = "Free"
 
-        global_match = re.search(r"(?:Total Score and Status|score)\s+(\d{1,3})\s*/?\s*100", text, re.IGNORECASE)
-        if global_match:
-            result["score"] = int(global_match.group(1))
+        m = re.search(r"(?:Total Score and Status|score)\s+(\d{1,3})\s*/?\s*100", text, re.IGNORECASE)
+        if m:
+            result["score"] = int(m.group(1))
         else:
-            fallback = re.search(r"\b(\d{1,3})\s*/?\s*100\b", text)
-            if fallback:
-                result["score"] = int(fallback.group(1))
+            m2 = re.search(r"\b(\d{1,3})\s*/?\s*100\b", text)
+            if m2:
+                result["score"] = int(m2.group(1))
 
-        pr_match = re.search(r"Political Rights\s+(\d{1,2})\s*/?\s*40", text, re.IGNORECASE)
-        if pr_match:
-            result["pr_score"] = int(pr_match.group(1))
-
-        cl_match = re.search(r"Civil Liberties\s+(\d{1,2})\s*/?\s*60", text, re.IGNORECASE)
-        if cl_match:
-            result["cl_score"] = int(cl_match.group(1))
+        pr = re.search(r"Political Rights\s+(\d{1,2})\s*/?\s*40", text, re.IGNORECASE)
+        if pr:
+            result["pr_score"] = int(pr.group(1))
+        cl = re.search(r"Civil Liberties\s+(\d{1,2})\s*/?\s*60", text, re.IGNORECASE)
+        if cl:
+            result["cl_score"] = int(cl.group(1))
 
         return result
-
     except Exception as e:
         return {"error": str(e), "url": url}
 
 
-def fetch_world_bank_indicator(country_code, indicator_code):
+# ─────────────────────────────────────────────
+# Fonctions Banque Mondiale
+# ─────────────────────────────────────────────
+def fetch_wb_history(country_code, indicator_code, n_years=10):
+    """Retourne les n dernières années de données pour un indicateur."""
     url = f"https://api.worldbank.org/v2/country/{country_code}/indicator/{indicator_code}?format=json&per_page=200"
     try:
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        data = response.json()
+        r = requests.get(url, timeout=30)
+        r.raise_for_status()
+        data = r.json()
         if not isinstance(data, list) or len(data) < 2 or data[1] is None:
-            return None
-        for row in data[1]:
-            if row["value"] is not None:
-                return {"value": row["value"], "year": row["date"]}
-        return None
+            return []
+        rows = [{"year": int(row["date"]), "value": row["value"]}
+                for row in data[1] if row["value"] is not None]
+        rows.sort(key=lambda x: x["year"])
+        return rows[-n_years:]
     except Exception:
-        return None
+        return []
 
 
-def fetch_world_bank_data(country_code):
-    population = fetch_world_bank_indicator(country_code, "SP.POP.TOTL")
-    gini = fetch_world_bank_indicator(country_code, "SI.POV.GINI")
-    gdp = fetch_world_bank_indicator(country_code, "NY.GDP.PCAP.CD")
-    return {"population": population, "gini": gini, "gdp_per_capita": gdp}
+def compute_trend(history):
+    """Retourne (valeur_actuelle, variation_5ans, symbole_tendance)."""
+    if not history:
+        return None, None, None
+    current = history[-1]["value"]
+    if len(history) >= 5:
+        old = history[-5]["value"]
+        delta = current - old
+        if delta > current * 0.03:
+            arrow = "↗"
+        elif delta < -current * 0.03:
+            arrow = "↘"
+        else:
+            arrow = "→"
+        return current, delta, arrow
+    return current, None, None
 
 
 # ─────────────────────────────────────────────
@@ -351,18 +350,39 @@ def render_metric(label, value, sub=None):
         <div class="metric-label">{label}</div>
         <div class="metric-value">{value}</div>
         {sub_html}
-    </div>
-    """, unsafe_allow_html=True)
+    </div>""", unsafe_allow_html=True)
+
+
+def render_metric_with_trend(label, value_str, delta, arrow, sub=None):
+    if arrow == "↗":
+        css, sign = "trend-up", "+"
+    elif arrow == "↘":
+        css, sign = "trend-down", ""
+    else:
+        css, sign = "trend-flat", ""
+
+    delta_html = (f'<span class="{css}" style="font-size:20px;margin-left:8px">{arrow}</span>'
+                  f'<span class="metric-sub" style="display:inline;margin-left:4px">'
+                  f'{sign}{delta:,.0f} sur 5 ans</span>'
+                  if delta is not None else "")
+    sub_html = f'<div class="metric-sub">{sub}</div>' if sub else ""
+    st.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-label">{label}</div>
+        <div class="metric-value">{value_str} {delta_html}</div>
+        {sub_html}
+    </div>""", unsafe_allow_html=True)
 
 
 def render_status_badge(status):
-    if status == "Free":
-        return '<span class="status-badge badge-free">● Libre</span>'
-    elif status == "Partly Free":
-        return '<span class="status-badge badge-partly">● Partiellement libre</span>'
-    elif status == "Not Free":
-        return '<span class="status-badge badge-notfree">● Non libre</span>'
-    return '<span class="status-badge" style="background:#222;color:#888;">Inconnu</span>'
+    mapping = {
+        "Free":        ('badge-free',    '● Libre'),
+        "Partly Free": ('badge-partly',  '● Partiellement libre'),
+        "Not Free":    ('badge-notfree', '● Non libre'),
+    }
+    css, label = mapping.get(status, ('', 'Inconnu'))
+    style = f'class="status-badge {css}"' if css else 'class="status-badge" style="background:#222;color:#888;"'
+    return f'<span {style}>{label}</span>'
 
 
 def format_population(value):
@@ -375,30 +395,46 @@ def format_population(value):
     return str(int(value))
 
 
+def render_vdem_bar(label, value):
+    """Affiche une barre de progression pour un score V-Dem (0 à 1)."""
+    if value is None:
+        return
+    pct = round(value * 100)
+    color = "#4caf7d" if pct >= 60 else ("#f0a500" if pct >= 35 else "#e05555")
+    st.markdown(f"""
+    <div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span style="font-size:12px;color:#aaa">{label}</span>
+            <span style="font-size:12px;font-weight:700;color:#f0ede6">{value:.2f}</span>
+        </div>
+        <div style="background:#2a2a2a;border-radius:4px;height:6px">
+            <div style="background:{color};width:{pct}%;height:6px;border-radius:4px"></div>
+        </div>
+    </div>""", unsafe_allow_html=True)
+
+
 # ─────────────────────────────────────────────
 # Interface principale
 # ─────────────────────────────────────────────
+vdem_df = load_vdem()
+
 st.markdown('<div class="title-block">', unsafe_allow_html=True)
 st.markdown("# 🌍 Outil de collecte de données - DER")
 st.markdown('<p style="color:#555; font-size:15px; margin-top:-8px;">Données politiques et économiques par pays</p>', unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Sélecteur de pays (trié alphabétiquement)
-country_options = dict(sorted(
-    {info["name"]: key for key, info in COUNTRY_MAPPING.items()}.items()
-))
+country_options = dict(sorted({info["name"]: key for key, info in COUNTRY_MAPPING.items()}.items()))
 selected_name = st.selectbox("Sélectionner un pays", options=list(country_options.keys()))
 selected_key = country_options[selected_name]
-
 st.write("")
 
 if st.button("Récupérer les données →"):
-
     country_info = COUNTRY_MAPPING[selected_key]
 
-    # ── Freedom House ──
+    # ══════════════════════════════════════
+    # FREEDOM HOUSE
+    # ══════════════════════════════════════
     st.markdown('<div class="source-header">Freedom House — Freedom in the World</div>', unsafe_allow_html=True)
-
     with st.spinner("Chargement Freedom House..."):
         fh = fetch_freedom_house(country_info["freedom_house_slug"])
 
@@ -411,53 +447,111 @@ if st.button("Récupérer les données →"):
             render_metric("Score global", score_display, f"Année {fh['year']}")
         with col2:
             badge = render_status_badge(fh.get("status"))
-            st.markdown(f"""
-            <div class="metric-card">
+            st.markdown(f"""<div class="metric-card">
                 <div class="metric-label">Statut</div>
                 <div style="margin-top:8px">{badge}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
+            </div>""", unsafe_allow_html=True)
         col3, col4 = st.columns(2)
         with col3:
-            pr = f"{fh['pr_score']}/40" if fh.get("pr_score") is not None else "N/A"
-            render_metric("Droits politiques", pr)
+            render_metric("Droits politiques", f"{fh['pr_score']}/40" if fh.get("pr_score") is not None else "N/A")
         with col4:
-            cl = f"{fh['cl_score']}/60" if fh.get("cl_score") is not None else "N/A"
-            render_metric("Libertés civiles", cl)
-
+            render_metric("Libertés civiles", f"{fh['cl_score']}/60" if fh.get("cl_score") is not None else "N/A")
         st.markdown(f'<p style="font-size:11px;color:#444;margin-top:4px;">Source : <a href="{fh["url"]}" style="color:#555">{fh["url"]}</a></p>', unsafe_allow_html=True)
 
-    # ── Banque Mondiale ──
+    # ══════════════════════════════════════
+    # BANQUE MONDIALE
+    # ══════════════════════════════════════
     st.markdown('<div class="source-header">Banque Mondiale</div>', unsafe_allow_html=True)
-
     with st.spinner("Chargement Banque Mondiale..."):
-        wb = fetch_world_bank_data(country_info["world_bank_code"])
+        wb_code = country_info["world_bank_code"]
+        pop_hist  = fetch_wb_history(wb_code, "SP.POP.TOTL")
+        gdp_hist  = fetch_wb_history(wb_code, "NY.GDP.PCAP.CD")
+        gini_hist = fetch_wb_history(wb_code, "SI.POV.GINI")
 
-    wb_has_data = any(v is not None for v in wb.values())
-
-    if not wb_has_data:
+    if not any([pop_hist, gdp_hist, gini_hist]):
         st.markdown('<div class="error-box">⚠ Source indisponible — Aucune donnée retournée</div>', unsafe_allow_html=True)
     else:
         col5, col6, col7 = st.columns(3)
-        with col5:
-            pop = wb.get("population")
-            render_metric(
-                "Population",
-                format_population(pop["value"]) if pop else "N/A",
-                f"Année {pop['year']}" if pop else ""
-            )
-        with col6:
-            gdp = wb.get("gdp_per_capita")
-            gdp_val = f"${gdp['value']:,.0f}" if gdp and gdp["value"] else "N/A"
-            render_metric("PIB / habitant", gdp_val, f"Année {gdp['year']}" if gdp else "")
-        with col7:
-            gini = wb.get("gini")
-            gini_val = f"{gini['value']:.1f}" if gini and gini["value"] else "N/A"
-            render_metric("Indice de Gini", gini_val, f"Année {gini['year']}" if gini else "")
 
-        # ✅ CORRECTION : URL avec le code ISO-2 (ex: ZA) au lieu du code ISO-3 (ex: ZAF)
-        wb_url_code = country_info.get("wb_url_code", country_info["world_bank_code"])
-        wb_url = f"https://data.worldbank.org/country/{wb_url_code}"
+        with col5:
+            val, delta, arrow = compute_trend(pop_hist)
+            val_str = format_population(val) if val else "N/A"
+            year_str = f"Année {pop_hist[-1]['year']}" if pop_hist else ""
+            render_metric_with_trend("Population", val_str, delta, arrow, year_str)
+
+        with col6:
+            val, delta, arrow = compute_trend(gdp_hist)
+            val_str = f"${val:,.0f}" if val else "N/A"
+            year_str = f"Année {gdp_hist[-1]['year']}" if gdp_hist else ""
+            render_metric_with_trend("PIB / habitant", val_str, delta, arrow, year_str)
+
+        with col7:
+            val, delta, arrow = compute_trend(gini_hist)
+            val_str = f"{val:.1f}" if val else "N/A"
+            year_str = f"Année {gini_hist[-1]['year']}" if gini_hist else ""
+            render_metric_with_trend("Indice de Gini", val_str, delta, arrow, year_str)
+
+        # Graphiques sur 10 ans
+        with st.expander("📈 Voir l'évolution sur 10 ans"):
+            tab1, tab2, tab3 = st.tabs(["Population", "PIB / habitant", "Indice de Gini"])
+            with tab1:
+                if pop_hist:
+                    df_pop = pd.DataFrame(pop_hist).set_index("year")
+                    st.line_chart(df_pop, color="#4caf7d")
+                else:
+                    st.write("Pas de données disponibles")
+            with tab2:
+                if gdp_hist:
+                    df_gdp = pd.DataFrame(gdp_hist).set_index("year")
+                    st.line_chart(df_gdp, color="#f0a500")
+                else:
+                    st.write("Pas de données disponibles")
+            with tab3:
+                if gini_hist:
+                    df_gini = pd.DataFrame(gini_hist).set_index("year")
+                    st.line_chart(df_gini, color="#e05555")
+                else:
+                    st.write("Pas de données disponibles")
+
+        wb_url = f"https://data.worldbank.org/country/{country_info['wb_url_code']}"
         st.markdown(f'<p style="font-size:11px;color:#444;margin-top:4px;">Source : <a href="{wb_url}" style="color:#555">{wb_url}</a></p>', unsafe_allow_html=True)
+
+    # ══════════════════════════════════════
+    # V-DEM
+    # ══════════════════════════════════════
+    st.markdown('<div class="source-header">V-Dem — Varieties of Democracy (2025)</div>', unsafe_allow_html=True)
+
+    if vdem_df is None:
+        st.markdown('<div class="error-box">⚠ Fichier vdem_data.csv introuvable — placez-le dans le même dossier que app.py</div>', unsafe_allow_html=True)
+    else:
+        country_vdem = vdem_df[vdem_df["country_name"] == selected_name]
+        if country_vdem.empty:
+            st.markdown(f'<div class="error-box">⚠ Pays non trouvé dans V-Dem : {selected_name}</div>', unsafe_allow_html=True)
+        else:
+            latest = country_vdem.sort_values("year").iloc[-1]
+            year_vdem = int(latest["year"])
+            st.markdown(f'<p style="color:#555;font-size:12px;margin-bottom:16px">Dernière année disponible : {year_vdem}</p>', unsafe_allow_html=True)
+
+            col_a, col_b = st.columns(2)
+            indicators = list(VDEM_LABELS.items())
+            mid = len(indicators) // 2
+
+            with col_a:
+                for col, label in indicators[:mid]:
+                    val = latest.get(col)
+                    render_vdem_bar(label, val if pd.notna(val) else None)
+            with col_b:
+                for col, label in indicators[mid:]:
+                    val = latest.get(col)
+                    render_vdem_bar(label, val if pd.notna(val) else None)
+
+            # Évolution V-Dem sur 10 ans
+            with st.expander("📈 Voir l'évolution V-Dem sur 10 ans"):
+                recent = country_vdem[country_vdem["year"] >= year_vdem - 10].set_index("year")
+                vdem_cols = [c for c in VDEM_LABELS.keys() if c in recent.columns]
+                chart_data = recent[vdem_cols].rename(columns=VDEM_LABELS)
+                st.line_chart(chart_data)
+
+            st.markdown('<p style="font-size:11px;color:#444;margin-top:4px;">Source : <a href="https://www.v-dem.net" style="color:#555">www.v-dem.net</a> — V-Dem Dataset v16</p>', unsafe_allow_html=True)
+
 
