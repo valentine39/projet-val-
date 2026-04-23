@@ -19,60 +19,97 @@ st.set_page_config(
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap');
-    html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
-    h1, h2, h3 { font-family: 'Syne', sans-serif; }
-    .stApp { background-color: #0f0f0f; color: #f0ede6; }
+
+    html, body, [class*="css"] {
+        font-family: 'DM Sans', sans-serif;
+        color: #111111;
+    }
+
+    h1, h2, h3 {
+        font-family: 'Syne', sans-serif;
+        color: #111111;
+    }
+
+    .stApp {
+        background-color: #ffffff;
+        color: #111111;
+    }
+
+    section[data-testid="stSidebar"] {
+        background-color: #fafafa;
+    }
+
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+    }
 
     .metric-card {
-        background: #1a1a1a;
-        border: 1px solid #2a2a2a;
-        border-radius: 12px;
+        background: #f7f7f5;
+        border: 1px solid #e6e3dc;
+        border-radius: 14px;
         padding: 20px 24px;
         margin-bottom: 12px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
     }
+
     .metric-label {
         font-size: 11px;
         letter-spacing: 0.12em;
         text-transform: uppercase;
-        color: #888;
+        color: #6b6b6b;
         margin-bottom: 6px;
     }
+
     .metric-value {
         font-family: 'Syne', sans-serif;
         font-size: 24px;
         font-weight: 700;
-        color: #f0ede6;
+        color: #111111;
+        line-height: 1.2;
     }
-    .metric-sub { font-size: 12px; color: #555; margin-top: 4px; }
 
-    .trend-up   { color: #4caf7d; }
-    .trend-down { color: #e05555; }
-    .trend-flat { color: #888; }
+    .metric-sub {
+        font-size: 12px;
+        color: #6f6f6f;
+        margin-top: 6px;
+    }
 
-    /* Titre de section thématique */
+    .trend-up {
+        color: #1f8f55;
+    }
+
+    .trend-down {
+        color: #c0392b;
+    }
+
+    .trend-flat {
+        color: #7a7a7a;
+    }
+
     .section-title {
         font-family: 'Syne', sans-serif;
-        font-size: 18px;
+        font-size: 20px;
         font-weight: 800;
-        color: #f0ede6;
-        margin: 36px 0 4px 0;
-        letter-spacing: 0.02em;
-    }
-    .section-subtitle {
-        font-size: 12px;
-        color: #444;
-        margin-bottom: 16px;
-        letter-spacing: 0.05em;
+        color: #111111;
+        margin: 40px 0 6px 0;
+        letter-spacing: 0.01em;
     }
 
-    /* Séparateur de sous-source */
+    .section-subtitle {
+        font-size: 12px;
+        color: #6f6f6f;
+        margin-bottom: 16px;
+        letter-spacing: 0.03em;
+    }
+
     .source-header {
         font-family: 'Syne', sans-serif;
         font-size: 11px;
         letter-spacing: 0.15em;
         text-transform: uppercase;
-        color: #444;
-        border-bottom: 1px solid #1e1e1e;
+        color: #7a7a7a;
+        border-bottom: 1px solid #e3dfd7;
         padding-bottom: 8px;
         margin: 20px 0 12px 0;
     }
@@ -85,9 +122,24 @@ st.markdown("""
         font-weight: 600;
         letter-spacing: 0.04em;
     }
-    .badge-free    { background: #1a3a2a; color: #4caf7d; }
-    .badge-partly  { background: #3a2a0a; color: #f0a500; }
-    .badge-notfree { background: #3a0a0a; color: #e05555; }
+
+    .badge-free {
+        background: #e9f7ef;
+        color: #1f8f55;
+        border: 1px solid #cfead9;
+    }
+
+    .badge-partly {
+        background: #fff4df;
+        color: #b26a00;
+        border: 1px solid #f0d7a5;
+    }
+
+    .badge-notfree {
+        background: #fdecea;
+        color: #c0392b;
+        border: 1px solid #f3c5bf;
+    }
 
     .income-badge {
         display: inline-block;
@@ -95,57 +147,84 @@ st.markdown("""
         border-radius: 20px;
         font-size: 13px;
         font-weight: 600;
-        background: #1a1a2a;
-        color: #8888ff;
+        background: #eef2ff;
+        color: #4b5fc7;
+        border: 1px solid #d9e0ff;
         letter-spacing: 0.04em;
     }
 
     .error-box {
-        background: #1a0a0a;
-        border: 1px solid #3a1a1a;
+        background: #fff4f4;
+        border: 1px solid #f0c8c8;
         border-radius: 10px;
         padding: 14px 18px;
-        color: #e05555;
+        color: #b42318;
         font-size: 13px;
         margin-bottom: 10px;
     }
+
     .na-box {
-        background: #1a1a1a;
-        border: 1px solid #2a2a2a;
+        background: #f8f8f8;
+        border: 1px solid #e1e1e1;
         border-radius: 10px;
         padding: 10px 16px;
-        color: #555;
+        color: #666666;
         font-size: 13px;
         margin-bottom: 10px;
     }
+
     div[data-testid="stButton"] button {
-        background: #f0ede6;
-        color: #0f0f0f;
+        background: #111111;
+        color: #ffffff;
         font-family: 'Syne', sans-serif;
         font-weight: 700;
         font-size: 14px;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.06em;
         border: none;
-        border-radius: 8px;
+        border-radius: 10px;
         padding: 12px 32px;
         width: 100%;
+        transition: all 0.2s ease;
     }
+
+    div[data-testid="stButton"] button:hover {
+        background: #2a2a2a;
+    }
+
     div[data-testid="stSelectbox"] label {
-        color: #888;
+        color: #666666;
         font-size: 11px;
         letter-spacing: 0.1em;
         text-transform: uppercase;
     }
-    .title-block { margin-bottom: 40px; }
+
+    .title-block {
+        margin-bottom: 36px;
+    }
+
     .source-note {
         font-size: 11px;
-        color: #333;
+        color: #6f6f6f;
         margin-top: 6px;
         margin-bottom: 4px;
     }
+
+    a {
+        color: #4b5fc7;
+        text-decoration: none;
+    }
+
+    a:hover {
+        text-decoration: underline;
+    }
+
+    hr {
+        border: none;
+        border-top: 1px solid #e6e3dc;
+        margin: 24px 0;
+    }
 </style>
 """, unsafe_allow_html=True)
-
 
 # ─────────────────────────────────────────────
 # Liste des pays
