@@ -530,7 +530,10 @@ def source_note(url, label="Banque Mondiale"):
 # ─────────────────────────────────────────────
 st.markdown('<div class="title-block">', unsafe_allow_html=True)
 st.markdown("# 🌍 Outil de collecte de données — DER")
-st.markdown('<p style="color:#444; font-size:14px; margin-top:-8px;">Données politiques et économiques par pays</p>', unsafe_allow_html=True)
+st.markdown(
+    '<p style="color:#6f6f6f; font-size:14px; margin-top:-8px;">Données politiques et économiques par pays</p>',
+    unsafe_allow_html=True
+)
 st.markdown('</div>', unsafe_allow_html=True)
 
 country_options = dict(sorted({info["name"]: key for key, info in COUNTRY_MAPPING.items()}.items()))
