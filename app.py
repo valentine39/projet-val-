@@ -250,8 +250,8 @@ VDEM_LABELS = {
 @st.cache_data
 def load_vdem():
     try:
-       import os
-return pd.read_csv(os.path.join(os.path.dirname(__file__), "vdem_data.csv"))
+        import os
+        return pd.read_csv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "vdem_data.csv"))
     except Exception:
         return None
 
@@ -554,5 +554,3 @@ if st.button("Récupérer les données →"):
                 st.line_chart(chart_data)
 
             st.markdown('<p style="font-size:11px;color:#444;margin-top:4px;">Source : <a href="https://www.v-dem.net" style="color:#555">www.v-dem.net</a> — V-Dem Dataset v16</p>', unsafe_allow_html=True)
-
-
