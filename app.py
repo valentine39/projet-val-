@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import pandas as pd
+import os
 
 # ─────────────────────────────────────────────
 # Configuration de la page
@@ -10,7 +11,7 @@ import pandas as pd
 st.set_page_config(
     page_title="Outil de collecte de données - DER",
     page_icon="🌍",
-    layout="centered"
+    layout="wide"
 )
 
 # ─────────────────────────────────────────────
@@ -18,15 +19,8 @@ st.set_page_config(
 # ─────────────────────────────────────────────
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap');
-
     html, body, [class*="css"] {
-        font-family: 'DM Sans', sans-serif;
-        color: #111111;
-    }
-
-    h1, h2, h3 {
-        font-family: 'Syne', sans-serif;
+        font-family: "Century Gothic", "Trebuchet MS", Arial, sans-serif;
         color: #111111;
     }
 
@@ -35,92 +29,87 @@ st.markdown("""
         color: #111111;
     }
 
-    section[data-testid="stSidebar"] {
-        background-color: #fafafa;
-    }
-
     .main .block-container {
-        padding-top: 2rem;
-        padding-bottom: 3rem;
+        padding-top: 1rem;
+        padding-bottom: 1.5rem;
+        max-width: 1200px;
     }
 
-    .metric-card {
-        background: #f7f7f5;
-        border: 1px solid #e6e3dc;
-        border-radius: 14px;
-        padding: 20px 24px;
-        margin-bottom: 12px;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-    }
-
-    .metric-label {
-        font-size: 11px;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: #6b6b6b;
-        margin-bottom: 6px;
-    }
-
-    .metric-value {
-        font-family: 'Syne', sans-serif;
-        font-size: 24px;
-        font-weight: 700;
+    h1, h2, h3 {
+        font-family: "Century Gothic", "Trebuchet MS", Arial, sans-serif;
         color: #111111;
-        line-height: 1.2;
     }
 
-    .metric-sub {
-        font-size: 12px;
-        color: #6f6f6f;
-        margin-top: 6px;
-    }
-
-    .trend-up {
-        color: #1f8f55;
-    }
-
-    .trend-down {
-        color: #c0392b;
-    }
-
-    .trend-flat {
-        color: #7a7a7a;
+    .title-block {
+        margin-bottom: 24px;
     }
 
     .section-title {
-        font-family: 'Syne', sans-serif;
         font-size: 20px;
-        font-weight: 800;
+        font-weight: 700;
         color: #111111;
-        margin: 40px 0 6px 0;
-        letter-spacing: 0.01em;
+        margin: 28px 0 4px 0;
     }
 
     .section-subtitle {
         font-size: 12px;
-        color: #6f6f6f;
-        margin-bottom: 16px;
-        letter-spacing: 0.03em;
+        color: #666666;
+        margin-bottom: 10px;
+    }
+
+    .source-note {
+        font-size: 11px;
+        color: #666666;
+        margin-top: 4px;
+        margin-bottom: 4px;
     }
 
     .source-header {
-        font-family: 'Syne', sans-serif;
         font-size: 11px;
-        letter-spacing: 0.15em;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: #7a7a7a;
-        border-bottom: 1px solid #e3dfd7;
-        padding-bottom: 8px;
-        margin: 20px 0 12px 0;
+        color: #777777;
+        border-bottom: 1px solid #dddddd;
+        padding-bottom: 6px;
+        margin: 14px 0 10px 0;
+    }
+
+    .metric-card {
+        background: #f7f7f5;
+        border: 1px solid #e1ddd6;
+        border-radius: 10px;
+        padding: 10px 14px;
+        margin-bottom: 8px;
+    }
+
+    .metric-label {
+        font-size: 9px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #6b6b6b;
+        margin-bottom: 2px;
+    }
+
+    .metric-value {
+        font-size: 18px;
+        font-weight: 700;
+        color: #111111;
+        line-height: 1.1;
+    }
+
+    .metric-sub {
+        font-size: 10px;
+        color: #777777;
+        margin-top: 2px;
     }
 
     .status-badge {
         display: inline-block;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 13px;
+        padding: 2px 8px;
+        border-radius: 14px;
+        font-size: 11px;
         font-weight: 600;
-        letter-spacing: 0.04em;
+        letter-spacing: 0.02em;
     }
 
     .badge-free {
@@ -143,85 +132,57 @@ st.markdown("""
 
     .income-badge {
         display: inline-block;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 13px;
+        padding: 2px 8px;
+        border-radius: 14px;
+        font-size: 11px;
         font-weight: 600;
         background: #eef2ff;
         color: #4b5fc7;
         border: 1px solid #d9e0ff;
-        letter-spacing: 0.04em;
     }
 
     .error-box {
         background: #fff4f4;
         border: 1px solid #f0c8c8;
         border-radius: 10px;
-        padding: 14px 18px;
+        padding: 10px 12px;
         color: #b42318;
-        font-size: 13px;
-        margin-bottom: 10px;
+        font-size: 12px;
+        margin-bottom: 8px;
     }
 
     .na-box {
         background: #f8f8f8;
         border: 1px solid #e1e1e1;
         border-radius: 10px;
-        padding: 10px 16px;
+        padding: 8px 12px;
         color: #666666;
-        font-size: 13px;
-        margin-bottom: 10px;
+        font-size: 12px;
+        margin-bottom: 8px;
     }
+
+    .trend-up { color: #1f8f55; font-size: 18px; }
+    .trend-down { color: #c0392b; font-size: 18px; }
+    .trend-flat { color: #777777; font-size: 18px; }
 
     div[data-testid="stButton"] button {
         background: #111111;
-        color: #ffffff;
-        font-family: 'Syne', sans-serif;
+        color: white;
+        font-family: "Century Gothic", "Trebuchet MS", Arial, sans-serif;
         font-weight: 700;
-        font-size: 14px;
-        letter-spacing: 0.06em;
+        font-size: 13px;
+        letter-spacing: 0.05em;
         border: none;
-        border-radius: 10px;
-        padding: 12px 32px;
+        border-radius: 8px;
+        padding: 10px 20px;
         width: 100%;
-        transition: all 0.2s ease;
-    }
-
-    div[data-testid="stButton"] button:hover {
-        background: #2a2a2a;
     }
 
     div[data-testid="stSelectbox"] label {
         color: #666666;
         font-size: 11px;
-        letter-spacing: 0.1em;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
-    }
-
-    .title-block {
-        margin-bottom: 36px;
-    }
-
-    .source-note {
-        font-size: 11px;
-        color: #6f6f6f;
-        margin-top: 6px;
-        margin-bottom: 4px;
-    }
-
-    a {
-        color: #4b5fc7;
-        text-decoration: none;
-    }
-
-    a:hover {
-        text-decoration: underline;
-    }
-
-    hr {
-        border: none;
-        border-top: 1px solid #e6e3dc;
-        margin: 24px 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -356,31 +317,56 @@ COUNTRY_MAPPING = {
     "zimbabwe": {"name": "Zimbabwe", "freedom_house_slug": "zimbabwe", "world_bank_code": "ZWE", "wb_url_code": "ZW"},
 }
 
-# Traduction des catégories de revenu Banque Mondiale
-INCOME_LABELS = {
-    "LIC":  "PFR — Pays à faible revenu",
-    "LMC":  "PRITI — Rev. intermédiaire tranche inf.",
-    "UMC":  "PRITS — Rev. intermédiaire tranche sup.",
-    "HIC":  "PRE — Pays à revenu élevé",
-    "INX":  "Non classifié",
+VDEM_LABELS = {
+    "v2x_polyarchy":      "Démocratie électorale",
+    "v2x_libdem":         "Démocratie libérale",
+    "v2x_partipdem":      "Démocratie participative",
+    "v2x_egaldem":        "Démocratie égalitaire",
+    "v2x_freexp_altinf":  "Liberté d'expression",
+    "v2x_frassoc_thick":  "Liberté d'association",
+    "v2x_cspart":         "Participation société civile",
+    "v2x_corr":           "Corruption (index)",
+    "v2x_rule":           "État de droit",
 }
 
+# ─────────────────────────────────────────────
+# Chargement V-Dem
+# ─────────────────────────────────────────────
+@st.cache_data
+def load_vdem():
+    try:
+        return pd.read_csv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "vdem_data.csv"))
+    except Exception:
+        return None
 
 # ─────────────────────────────────────────────
-# Fonctions de récupération
+# Freedom House
 # ─────────────────────────────────────────────
-
 def fetch_freedom_house(country_slug, year=2026):
     url = f"https://freedomhouse.org/country/{country_slug}/freedom-world/{year}"
     try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url, timeout=30, headers=headers)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
         text = re.sub(r"\s+", " ", soup.get_text(" ", strip=True))
 
-        result = {"status": None, "score": None, "pr_score": None,
-                  "cl_score": None, "year": year, "url": url, "error": None}
+        result = {
+            "country": None,
+            "status": None,
+            "score": None,
+            "pr_score": None,
+            "cl_score": None,
+            "year": year,
+            "url": url,
+            "error": None
+        }
+
+        result["country"] = (
+            soup.title.string.split(":")[0].strip()
+            if soup.title and soup.title.string
+            else country_slug.replace("-", " ").title()
+        )
 
         if re.search(r"\bNot Free\b", text):
             result["status"] = "Not Free"
@@ -400,16 +386,19 @@ def fetch_freedom_house(country_slug, year=2026):
         pr = re.search(r"Political Rights\s+(\d{1,2})\s*/?\s*40", text, re.IGNORECASE)
         if pr:
             result["pr_score"] = int(pr.group(1))
+
         cl = re.search(r"Civil Liberties\s+(\d{1,2})\s*/?\s*60", text, re.IGNORECASE)
         if cl:
             result["cl_score"] = int(cl.group(1))
+
         return result
     except Exception as e:
         return {"error": str(e), "url": url}
 
-
+# ─────────────────────────────────────────────
+# Banque mondiale
+# ─────────────────────────────────────────────
 def fetch_wb_history(country_code, indicator_code, n_years=10):
-    """Retourne les n dernières années avec données non nulles."""
     url = f"https://api.worldbank.org/v2/country/{country_code}/indicator/{indicator_code}?format=json&per_page=200"
     try:
         r = requests.get(url, timeout=30)
@@ -424,9 +413,7 @@ def fetch_wb_history(country_code, indicator_code, n_years=10):
     except Exception:
         return []
 
-
 def fetch_wb_country_info(country_code):
-    """Récupère le statut de revenu et la région depuis l'API WB."""
     url = f"https://api.worldbank.org/v2/country/{country_code}?format=json"
     try:
         r = requests.get(url, timeout=30)
@@ -438,298 +425,264 @@ def fetch_wb_country_info(country_code):
         return {
             "income_code": c.get("incomeLevel", {}).get("id", ""),
             "income_label": c.get("incomeLevel", {}).get("value", ""),
-            "region": c.get("region", {}).get("value", ""),
+            "region": c.get("region", {}).get("value", "")
         }
     except Exception:
         return None
 
-
-def compute_trend(history):
-    if not history:
-        return None, None, None
-    current = history[-1]["value"]
-    if len(history) >= 5 and current:
-        old = history[-5]["value"]
-        if old:
-            delta = current - old
-            pct = abs(delta) / abs(old) * 100 if old != 0 else 0
-            if pct > 3:
-                arrow = "↗" if delta > 0 else "↘"
-            else:
-                arrow = "→"
-            return current, delta, arrow
-    return current, None, None
-
+INCOME_LABELS = {
+    "LIC": "PFR — Pays à faible revenu",
+    "LMC": "PRITI — Rev. intermédiaire tranche inf.",
+    "UMC": "PRITS — Rev. intermédiaire tranche sup.",
+    "HIC": "PRE — Pays à revenu élevé",
+    "INX": "Non classifié",
+}
 
 # ─────────────────────────────────────────────
-# Fonctions d'affichage
+# Construction mécanique des sections
 # ─────────────────────────────────────────────
+def build_header_table(country_name, fh, gdp_hist, wb_info):
+    rows = []
 
-def render_metric(label, value_str, sub=None, trend_arrow=None, delta_str=None):
-    """Carte métrique avec tendance optionnelle."""
-    if trend_arrow == "↗":
-        arrow_html = f'<span class="trend-up" style="font-size:20px;margin-left:6px">↗</span>'
-        delta_html = f'<span class="trend-up" style="font-size:11px;margin-left:4px">{delta_str}</span>' if delta_str else ""
-    elif trend_arrow == "↘":
-        arrow_html = f'<span class="trend-down" style="font-size:20px;margin-left:6px">↘</span>'
-        delta_html = f'<span class="trend-down" style="font-size:11px;margin-left:4px">{delta_str}</span>' if delta_str else ""
-    elif trend_arrow == "→":
-        arrow_html = f'<span class="trend-flat" style="font-size:20px;margin-left:6px">→</span>'
-        delta_html = ""
+    if fh and not fh.get("error"):
+        rows.append({
+            "Indicateur": "Freedom House — score",
+            "Valeur": f"{fh['score']}/100" if fh.get("score") is not None else "N/A",
+            "Année": fh.get("year"),
+            "Source": "Freedom House"
+        })
+        rows.append({
+            "Indicateur": "Freedom House — statut",
+            "Valeur": fh.get("status", "N/A"),
+            "Année": fh.get("year"),
+            "Source": "Freedom House"
+        })
+
+    if gdp_hist:
+        last = gdp_hist[-1]
+        rows.append({
+            "Indicateur": "PIB / habitant",
+            "Valeur": f"${last['value']:,.0f}",
+            "Année": last["year"],
+            "Source": "Banque mondiale"
+        })
+
+    if wb_info:
+        income_code = wb_info.get("income_code", "")
+        income_label = INCOME_LABELS.get(income_code, wb_info.get("income_label", "Non classifié"))
+        rows.append({
+            "Indicateur": "Statut de revenu",
+            "Valeur": income_label,
+            "Année": None,
+            "Source": "Banque mondiale"
+        })
+        rows.append({
+            "Indicateur": "Région",
+            "Valeur": wb_info.get("region", "N/A"),
+            "Année": None,
+            "Source": "Banque mondiale"
+        })
+
+    return pd.DataFrame(rows)
+
+def build_labour_table(emp_total_hist, emp_youth_hist, emp_women_hist):
+    rows = []
+
+    if emp_total_hist:
+        rows.append({
+            "Indicateur": "Taux d'emploi total",
+            "Valeur": f"{emp_total_hist[-1]['value']:.1f}%",
+            "Année": emp_total_hist[-1]["year"],
+            "Source": "Banque mondiale"
+        })
+
+    if emp_youth_hist:
+        rows.append({
+            "Indicateur": "Chômage des jeunes",
+            "Valeur": f"{emp_youth_hist[-1]['value']:.1f}%",
+            "Année": emp_youth_hist[-1]["year"],
+            "Source": "Banque mondiale"
+        })
+
+    if emp_women_hist:
+        rows.append({
+            "Indicateur": "Taux d'emploi des femmes",
+            "Valeur": f"{emp_women_hist[-1]['value']:.1f}%",
+            "Année": emp_women_hist[-1]["year"],
+            "Source": "Banque mondiale"
+        })
+
+    return pd.DataFrame(rows)
+
+def build_poverty_table(gini_hist, poverty_hist):
+    rows = []
+
+    if poverty_hist:
+        rows.append({
+            "Indicateur": "Taux de pauvreté (< 2,15$/j)",
+            "Valeur": f"{poverty_hist[-1]['value']:.1f}%",
+            "Année": poverty_hist[-1]["year"],
+            "Source": "Banque mondiale"
+        })
+
+    if gini_hist:
+        rows.append({
+            "Indicateur": "Indice de Gini",
+            "Valeur": f"{gini_hist[-1]['value']:.1f}",
+            "Année": gini_hist[-1]["year"],
+            "Source": "Banque mondiale"
+        })
+
+    return pd.DataFrame(rows)
+
+def build_education_table(prim_hist, sec_hist, tert_hist):
+    rows = []
+
+    if prim_hist:
+        rows.append({
+            "Indicateur": "Scolarisation primaire (taux brut)",
+            "Valeur": f"{prim_hist[-1]['value']:.1f}%",
+            "Année": prim_hist[-1]["year"],
+            "Source": "Banque mondiale"
+        })
+
+    if sec_hist:
+        rows.append({
+            "Indicateur": "Scolarisation secondaire (taux brut)",
+            "Valeur": f"{sec_hist[-1]['value']:.1f}%",
+            "Année": sec_hist[-1]["year"],
+            "Source": "Banque mondiale"
+        })
+
+    if tert_hist:
+        rows.append({
+            "Indicateur": "Scolarisation tertiaire (taux brut)",
+            "Valeur": f"{tert_hist[-1]['value']:.1f}%",
+            "Année": tert_hist[-1]["year"],
+            "Source": "Banque mondiale"
+        })
+
+    return pd.DataFrame(rows)
+
+def build_vdem_table(country_vdem):
+    if country_vdem is None or country_vdem.empty:
+        return pd.DataFrame()
+
+    latest = country_vdem.sort_values("year").iloc[-1]
+    rows = []
+
+    for col, label in VDEM_LABELS.items():
+        if col in latest and pd.notna(latest[col]):
+            rows.append({
+                "Indicateur": label,
+                "Valeur": f"{latest[col]:.2f}",
+                "Année": int(latest["year"]),
+                "Source": "V-Dem"
+            })
+
+    return pd.DataFrame(rows)
+
+# ─────────────────────────────────────────────
+# Affichage
+# ─────────────────────────────────────────────
+def render_section_table(title, subtitle, df):
+    st.markdown(f'<div class="section-title">{title}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-subtitle">{subtitle}</div>', unsafe_allow_html=True)
+
+    if df.empty:
+        st.markdown('<div class="na-box">Aucune donnée disponible pour cette section.</div>', unsafe_allow_html=True)
     else:
-        arrow_html = ""
-        delta_html = ""
-
-    sub_html = f'<div class="metric-sub">{sub}</div>' if sub else ""
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-label">{label}</div>
-        <div class="metric-value">{value_str}{arrow_html}{delta_html}</div>
-        {sub_html}
-    </div>""", unsafe_allow_html=True)
-
-
-def render_na(label, reason="Données non disponibles"):
-    st.markdown(f'<div class="na-box">— <strong>{label}</strong> : {reason}</div>', unsafe_allow_html=True)
-
-
-def render_status_badge(status):
-    mapping = {
-        "Free":        ("badge-free",    "● Libre"),
-        "Partly Free": ("badge-partly",  "● Partiellement libre"),
-        "Not Free":    ("badge-notfree", "● Non libre"),
-    }
-    css, label = mapping.get(status, ("", "Inconnu"))
-    style = f'class="status-badge {css}"' if css else 'class="status-badge" style="background:#222;color:#888;"'
-    return f'<span {style}>{label}</span>'
-
-
-def format_population(v):
-    if v is None: return "N/A"
-    if v >= 1_000_000: return f"{v/1_000_000:.1f}M"
-    if v >= 1_000: return f"{v/1_000:.0f}K"
-    return str(int(v))
-
-
-def show_chart(history, color, label):
-    """Affiche un graphique d'évolution dans un expander."""
-    if not history:
-        st.markdown('<div class="na-box">Pas de données historiques disponibles</div>', unsafe_allow_html=True)
-        return
-    with st.expander(f"📈 Évolution sur {len(history)} ans"):
-        df = pd.DataFrame(history).set_index("year").rename(columns={"value": label})
-        st.line_chart(df, color=color)
-
-
-def source_note(url, label="Banque Mondiale"):
-    st.markdown(f'<p class="source-note">Source : <a href="{url}" style="color:#444">{label}</a></p>', unsafe_allow_html=True)
-
+        st.dataframe(df, use_container_width=True, hide_index=True)
 
 # ─────────────────────────────────────────────
 # Interface principale
 # ─────────────────────────────────────────────
+vdem_df = load_vdem()
+
 st.markdown('<div class="title-block">', unsafe_allow_html=True)
 st.markdown("# 🌍 Outil de collecte de données — DER")
-st.markdown(
-    '<p style="color:#6f6f6f; font-size:14px; margin-top:-8px;">Données politiques et économiques par pays</p>',
-    unsafe_allow_html=True
-)
+st.markdown('<p style="color:#6f6f6f; font-size:14px; margin-top:-8px;">Données politiques et économiques par pays</p>', unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
 country_options = dict(sorted({info["name"]: key for key, info in COUNTRY_MAPPING.items()}.items()))
 selected_name = st.selectbox("Sélectionner un pays", options=list(country_options.keys()))
 selected_key = country_options[selected_name]
-country_info = COUNTRY_MAPPING[selected_key]
-wb_code = country_info["world_bank_code"]
-
-st.write("")
 
 if st.button("Récupérer les données →"):
+    country_info = COUNTRY_MAPPING[selected_key]
+    wb_code = country_info["world_bank_code"]
 
-    # ══════════════════════════════════════════════════════
-    # SECTION 1 — EN-TÊTE
-    # ══════════════════════════════════════════════════════
-    st.markdown('<div class="section-title">📋 En-tête</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-subtitle">Indicateurs de gouvernance et de positionnement du pays</div>', unsafe_allow_html=True)
+    # Collecte
+    with st.spinner("Chargement des données..."):
+        fh = fetch_freedom_house(country_info["freedom_house_slug"])
 
-    col1, col2 = st.columns(2)
+        gdp_hist = fetch_wb_history(wb_code, "NY.GDP.PCAP.CD")
+        wb_info = fetch_wb_country_info(wb_code)
 
-    # — Freedom House —
-    with col1:
-        st.markdown('<div class="source-header">Freedom House</div>', unsafe_allow_html=True)
-        with st.spinner("Chargement..."):
-            fh = fetch_freedom_house(country_info["freedom_house_slug"])
-        if fh.get("error"):
-            st.markdown(f'<div class="error-box">⚠ Indisponible — {fh["error"]}</div>', unsafe_allow_html=True)
-        else:
-            score_str = f"{fh['score']}/100" if fh.get("score") is not None else "N/A"
-            render_metric("Score liberté", score_str, f"Année {fh['year']}")
-            if fh.get("status"):
-                badge = render_status_badge(fh["status"])
-                st.markdown(f"""<div class="metric-card">
-                    <div class="metric-label">Statut</div>
-                    <div style="margin-top:8px">{badge}</div>
-                </div>""", unsafe_allow_html=True)
-            c3, c4 = st.columns(2)
-            with c3:
-                render_metric("Droits politiques", f"{fh['pr_score']}/40" if fh.get("pr_score") is not None else "N/A")
-            with c4:
-                render_metric("Libertés civiles", f"{fh['cl_score']}/60" if fh.get("cl_score") is not None else "N/A")
-        source_note(fh.get("url", "https://freedomhouse.org"), "freedomhouse.org")
+        emp_total_hist = fetch_wb_history(wb_code, "SL.EMP.TOTL.SP.ZS")
+        emp_youth_hist = fetch_wb_history(wb_code, "SL.UEM.1524.ZS")
+        emp_women_hist = fetch_wb_history(wb_code, "SL.EMP.TOTL.SP.FE.ZS")
 
-    # — WGI + PIB + Statut —
-    with col2:
-        st.markdown('<div class="source-header">Banque Mondiale</div>', unsafe_allow_html=True)
-        with st.spinner("Chargement..."):
-            gdp_hist    = fetch_wb_history(wb_code, "NY.GDP.PCAP.CD")
-            wgi_hist    = fetch_wb_history(wb_code, "IQ.WGI.GOVS.NO.SRC")  # Governance score synthétique
-            wb_info     = fetch_wb_country_info(wb_code)
+        poverty_hist = fetch_wb_history(wb_code, "SI.POV.DDAY")
+        gini_hist = fetch_wb_history(wb_code, "SI.POV.GINI")
 
-        # PIB / habitant
-        val, delta, arrow = compute_trend(gdp_hist)
-        if val:
-            delta_str = f"{'+' if delta > 0 else ''}{delta:,.0f} $ sur 5 ans" if delta else None
-            render_metric("PIB / habitant", f"${val:,.0f}", f"Année {gdp_hist[-1]['year']}", arrow, delta_str)
-            show_chart(gdp_hist, "#f0a500", "PIB/hab ($)")
-        else:
-            render_na("PIB / habitant")
+        prim_hist = fetch_wb_history(wb_code, "SE.PRM.ENRR")
+        sec_hist = fetch_wb_history(wb_code, "SE.SEC.ENRR")
+        tert_hist = fetch_wb_history(wb_code, "SE.TER.ENRR")
 
-        # WGI Gouvernance
-        val_wgi, delta_wgi, arrow_wgi = compute_trend(wgi_hist)
-        if val_wgi:
-            delta_str_wgi = f"{'+' if delta_wgi > 0 else ''}{delta_wgi:.2f} sur 5 ans" if delta_wgi else None
-            render_metric("Gouvernance (WGI)", f"{val_wgi:.2f}", f"Année {wgi_hist[-1]['year']}", arrow_wgi, delta_str_wgi)
-            show_chart(wgi_hist, "#8888ff", "WGI Gouvernance")
-        else:
-            render_na("Gouvernance WGI", "Indicateur non disponible pour ce pays")
+        country_vdem = None
+        if vdem_df is not None and "country_name" in vdem_df.columns:
+            country_vdem = vdem_df[vdem_df["country_name"] == selected_name]
 
-        # Statut du pays
-        if wb_info:
-            income_code = wb_info.get("income_code", "")
-            label_fr = INCOME_LABELS.get(income_code, wb_info.get("income_label", "Non classifié"))
-            st.markdown(f"""<div class="metric-card">
-                <div class="metric-label">Statut de revenu</div>
-                <div style="margin-top:8px"><span class="income-badge">{label_fr}</span></div>
-                <div class="metric-sub" style="margin-top:8px">Région : {wb_info.get('region', '—')}</div>
-            </div>""", unsafe_allow_html=True)
-        else:
-            render_na("Statut du pays")
+    # Sections mécaniques
+    header_df = build_header_table(country_info["name"], fh, gdp_hist, wb_info)
+    labour_df = build_labour_table(emp_total_hist, emp_youth_hist, emp_women_hist)
+    poverty_df = build_poverty_table(gini_hist, poverty_hist)
+    education_df = build_education_table(prim_hist, sec_hist, tert_hist)
+    vdem_table = build_vdem_table(country_vdem)
 
-        wb_url = f"https://data.worldbank.org/country/{country_info['wb_url_code']}"
-        source_note(wb_url)
+    # Affichage
+    render_section_table(
+        "En-tête",
+        "Indicateurs synthétiques de positionnement politique et économique",
+        header_df
+    )
 
-    # ══════════════════════════════════════════════════════
-    # SECTION 2 — MARCHÉ DU TRAVAIL
-    # ══════════════════════════════════════════════════════
-    st.markdown('<div class="section-title">💼 Marché du travail</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-subtitle">Taux d\'emploi — Source : Banque Mondiale (OIT)</div>', unsafe_allow_html=True)
+    render_section_table(
+        "Marché du travail",
+        "Indicateurs d’emploi et d’insertion",
+        labour_df
+    )
 
-    with st.spinner("Chargement marché du travail..."):
-        emp_total_hist  = fetch_wb_history(wb_code, "SL.EMP.TOTL.SP.ZS")   # Emploi total (% pop. active)
-        emp_youth_hist  = fetch_wb_history(wb_code, "SL.UEM.1524.ZS")       # Chômage jeunes (15-24)
-        emp_women_hist  = fetch_wb_history(wb_code, "SL.EMP.TOTL.SP.FE.ZS") # Emploi femmes (% pop. fém. active)
+    render_section_table(
+        "Pauvreté et inégalités",
+        "Mesures synthétiques des conditions de vie et de la distribution",
+        poverty_df
+    )
 
-    col_e1, col_e2, col_e3 = st.columns(3)
+    render_section_table(
+        "Éducation",
+        "Indicateurs de scolarisation actuellement disponibles",
+        education_df
+    )
 
-    with col_e1:
-        val, delta, arrow = compute_trend(emp_total_hist)
-        if val:
-            delta_str = f"{'+' if delta > 0 else ''}{delta:.1f} pts sur 5 ans" if delta else None
-            render_metric("Emploi total", f"{val:.1f}%", f"Année {emp_total_hist[-1]['year']}", arrow, delta_str)
-            show_chart(emp_total_hist, "#4caf7d", "Emploi total (%)")
-        else:
-            render_na("Emploi total")
+    render_section_table(
+        "V-Dem",
+        "Indicateurs institutionnels issus du dataset V-Dem",
+        vdem_table
+    )
 
-    with col_e2:
-        val, delta, arrow = compute_trend(emp_youth_hist)
-        if val:
-            delta_str = f"{'+' if delta > 0 else ''}{delta:.1f} pts sur 5 ans" if delta else None
-            render_metric("Chômage jeunes", f"{val:.1f}%", f"15-24 ans — {emp_youth_hist[-1]['year']}", arrow, delta_str)
-            show_chart(emp_youth_hist, "#f0a500", "Chômage jeunes (%)")
-        else:
-            render_na("Emploi jeunes")
-
-    with col_e3:
-        val, delta, arrow = compute_trend(emp_women_hist)
-        if val:
-            delta_str = f"{'+' if delta > 0 else ''}{delta:.1f} pts sur 5 ans" if delta else None
-            render_metric("Emploi femmes", f"{val:.1f}%", f"Année {emp_women_hist[-1]['year']}", arrow, delta_str)
-            show_chart(emp_women_hist, "#c084fc", "Emploi femmes (%)")
-        else:
-            render_na("Emploi femmes")
-
-    source_note(f"https://data.worldbank.org/country/{country_info['wb_url_code']}")
-
-    # ══════════════════════════════════════════════════════
-    # SECTION 3 — PAUVRETÉ ET INÉGALITÉS
-    # ══════════════════════════════════════════════════════
-    st.markdown('<div class="section-title">📊 Pauvreté et inégalités</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-subtitle">Source : Banque Mondiale (PovcalNet / WDI)</div>', unsafe_allow_html=True)
-
-    with st.spinner("Chargement pauvreté..."):
-        poverty_hist = fetch_wb_history(wb_code, "SI.POV.DDAY")   # Pauvreté < 2,15$/jour
-        gini_hist    = fetch_wb_history(wb_code, "SI.POV.GINI")   # Indice de Gini
-
-    col_p1, col_p2 = st.columns(2)
-
-    with col_p1:
-        val, delta, arrow = compute_trend(poverty_hist)
-        if val:
-            delta_str = f"{'+' if delta > 0 else ''}{delta:.1f} pts sur 5 ans" if delta else None
-            render_metric("Taux de pauvreté", f"{val:.1f}%", f"< 2,15$/j — {poverty_hist[-1]['year']}", arrow, delta_str)
-            show_chart(poverty_hist, "#e05555", "Pauvreté < 2,15$/j (%)")
-        else:
-            render_na("Taux de pauvreté", "Souvent absent pour les pays à revenu intermédiaire")
-
-    with col_p2:
-        val, delta, arrow = compute_trend(gini_hist)
-        if val:
-            delta_str = f"{'+' if delta > 0 else ''}{delta:.1f} pts sur 5 ans" if delta else None
-            render_metric("Indice de Gini", f"{val:.1f}", f"Année {gini_hist[-1]['year']}", arrow, delta_str)
-            show_chart(gini_hist, "#f0a500", "Gini")
-        else:
-            render_na("Indice de Gini", "Enquêtes disponibles par intermittence")
-
-    source_note(f"https://data.worldbank.org/country/{country_info['wb_url_code']}")
-
-    # ══════════════════════════════════════════════════════
-    # SECTION 4 — ÉDUCATION
-    # ══════════════════════════════════════════════════════
-    st.markdown('<div class="section-title">🎓 Éducation</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-subtitle">Source : Banque Mondiale / UNESCO</div>', unsafe_allow_html=True)
-
-    with st.spinner("Chargement éducation..."):
-        prim_hist  = fetch_wb_history(wb_code, "SE.PRM.ENRR")   # Scolarisation primaire (brut)
-        sec_hist   = fetch_wb_history(wb_code, "SE.SEC.ENRR")   # Scolarisation secondaire (brut)
-        tert_hist  = fetch_wb_history(wb_code, "SE.TER.ENRR")   # Scolarisation tertiaire (brut)
-
-    col_s1, col_s2, col_s3 = st.columns(3)
-
-    with col_s1:
-        val, delta, arrow = compute_trend(prim_hist)
-        if val:
-            delta_str = f"{'+' if delta > 0 else ''}{delta:.1f} pts sur 5 ans" if delta else None
-            render_metric("Scolarisation primaire", f"{val:.1f}%", f"Taux brut — {prim_hist[-1]['year']}", arrow, delta_str)
-            show_chart(prim_hist, "#4caf7d", "Primaire (%)")
-        else:
-            render_na("Scolarisation primaire")
-
-    with col_s2:
-        val, delta, arrow = compute_trend(sec_hist)
-        if val:
-            delta_str = f"{'+' if delta > 0 else ''}{delta:.1f} pts sur 5 ans" if delta else None
-            render_metric("Scolarisation secondaire", f"{val:.1f}%", f"Taux brut — {sec_hist[-1]['year']}", arrow, delta_str)
-            show_chart(sec_hist, "#f0a500", "Secondaire (%)")
-        else:
-            render_na("Scolarisation secondaire")
-
-    with col_s3:
-        val, delta, arrow = compute_trend(tert_hist)
-        if val:
-            delta_str = f"{'+' if delta > 0 else ''}{delta:.1f} pts sur 5 ans" if delta else None
-            render_metric("Scolarisation tertiaire", f"{val:.1f}%", f"Taux brut — {tert_hist[-1]['year']}", arrow, delta_str)
-            show_chart(tert_hist, "#8888ff", "Tertiaire (%)")
-        else:
-            render_na("Scolarisation tertiaire")
-
-    source_note(f"https://data.worldbank.org/country/{country_info['wb_url_code']}")
+    # Notes sources
+    st.markdown("---")
+    st.markdown(
+        f'<p class="source-note">Freedom House : <a href="{fh.get("url", "https://freedomhouse.org")}" target="_blank">voir la source</a></p>',
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        f'<p class="source-note">Banque mondiale : <a href="https://data.worldbank.org/country/{country_info["wb_url_code"]}" target="_blank">voir la source</a></p>',
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        '<p class="source-note">V-Dem : <a href="https://www.v-dem.net" target="_blank">voir la source</a></p>',
+        unsafe_allow_html=True
+    )
