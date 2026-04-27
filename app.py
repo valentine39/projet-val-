@@ -256,21 +256,152 @@ def fetch_wb_country_info(country_code):
         return None
 
 
-def fetch_undp_hdi(iso3):
-    """Récupère IDH via l'API PNUD HDR."""
+UNDP_HDI_EXCEL_URL = "https://hdr.undp.org/sites/default/files/2025_HDR/HDR25_Statistical_Annex_HDI_Table.xlsx"
+UNDP_HDI_YEAR = 2023  # Table statistique du Human Development Report 2025
+
+
+def normalize_country_text(value):
+    """Normalise les noms de pays pour comparer des libellés français/anglais approximatifs."""
+    if value is None:
+        return ""
+    value = str(value).lower().strip()
+    replacements = {
+        "é": "e", "è": "e", "ê": "e", "ë": "e",
+        "à": "a", "â": "a", "ä": "a",
+        "î": "i", "ï": "i",
+        "ô": "o", "ö": "o",
+        "ù": "u", "û": "u", "ü": "u",
+        "ç": "c", "’": "'", "-": " ", "_": " ",
+    }
+    for old, new in replacements.items():
+        value = value.replace(old, new)
+    value = re.sub(r"[^a-z0-9' ]", " ", value)
+    value = re.sub(r"\s+", " ", value).strip()
+    return value
+
+
+UNDP_NAME_ALIASES = {
+    "ZAF": ["south africa"],
+    "CIV": ["cote d'ivoire", "cote divoire"],
+    "COD": ["democratic republic of the congo", "congo democratic republic of the"],
+    "COG": ["congo", "republic of the congo"],
+    "CPV": ["cabo verde", "cape verde"],
+    "SWZ": ["eswatini"],
+    "TLS": ["timor leste"],
+    "MMR": ["myanmar"],
+    "MKD": ["north macedonia"],
+    "STP": ["sao tome and principe"],
+    "VCT": ["saint vincent and the grenadines"],
+    "LCA": ["saint lucia"],
+    "DOM": ["dominican republic"],
+    "KGZ": ["kyrgyzstan"],
+    "TUR": ["turkiye", "turkey"],
+    "YEM": ["yemen"],
+}
+
+
+@st.cache_data(ttl=86400)
+def load_undp_hdi_table_raw():
+    """Télécharge le fichier Excel officiel UNDP/HDR en ligne, avec cache 24h."""
+    return pd.read_excel(UNDP_HDI_EXCEL_URL, header=None, engine="openpyxl")
+
+
+def parse_float_like(value):
+    """Convertit une cellule Excel en float si possible."""
+    if value is None or pd.isna(value):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip().replace(",", ".")
+    match = re.search(r"-?\d+(?:\.\d+)?", text)
+    if not match:
+        return None
     try:
-        url = f"https://api.hdr.undp.org/api/indicators/137906?iso={iso3}&latest=true"
-        r = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-        r.raise_for_status()
-        data = r.json()
-        countries = data.get("data", {}).get("countries", [])
-        if countries:
-            for ind in countries[0].get("indicators", []):
-                if str(ind.get("id")) == "137906":
-                    return ind.get("value"), ind.get("year")
-        return None, None
+        return float(match.group(0))
     except Exception:
-        return None, None
+        return None
+
+
+def fetch_undp_hdi(iso3, country_name=None, country_slug=None):
+    """
+    Récupère l'IDH et le rang depuis le fichier Excel officiel UNDP/HDR en ligne.
+    Ce n'est pas un CSV local : l'application télécharge la source officielle avec cache 24h.
+    """
+    try:
+        raw = load_undp_hdi_table_raw()
+
+        candidates = set()
+        candidates.add(normalize_country_text(country_name))
+        if country_slug:
+            candidates.add(normalize_country_text(country_slug.replace("-", " ")))
+        for alias in UNDP_NAME_ALIASES.get(str(iso3).upper(), []):
+            candidates.add(normalize_country_text(alias))
+        candidates = {c for c in candidates if c}
+
+        best_row = None
+
+        for _, row in raw.iterrows():
+            text_cells = [normalize_country_text(x) for x in row.tolist() if isinstance(x, str)]
+            text_cells = [x for x in text_cells if x]
+            if not text_cells:
+                continue
+
+            row_text = " | ".join(text_cells)
+
+            matched = False
+            for candidate in candidates:
+                if candidate in text_cells or candidate in row_text:
+                    matched = True
+                    break
+
+            if not matched and str(iso3).lower() in [x.lower() for x in text_cells]:
+                matched = True
+
+            if matched:
+                nums = [parse_float_like(x) for x in row.tolist()]
+                nums = [x for x in nums if x is not None]
+
+                rank = None
+                for x in nums:
+                    if 1 <= x <= 250 and float(x).is_integer():
+                        rank = int(x)
+                        break
+
+                hdi_value = None
+                for x in nums:
+                    if 0 < x <= 1:
+                        hdi_value = float(x)
+                        break
+
+                if hdi_value is not None or rank is not None:
+                    best_row = {
+                        "value": hdi_value,
+                        "rank": rank,
+                        "year": UNDP_HDI_YEAR,
+                        "source_url": UNDP_HDI_EXCEL_URL,
+                        "error": None,
+                    }
+                    break
+
+        if best_row is None:
+            return {
+                "value": None,
+                "rank": None,
+                "year": UNDP_HDI_YEAR,
+                "source_url": UNDP_HDI_EXCEL_URL,
+                "error": "Pays introuvable dans le fichier Excel UNDP/HDR.",
+            }
+
+        return best_row
+
+    except Exception as e:
+        return {
+            "value": None,
+            "rank": None,
+            "year": UNDP_HDI_YEAR,
+            "source_url": UNDP_HDI_EXCEL_URL,
+            "error": str(e),
+        }
 
 
 def flag_old(year):
@@ -394,7 +525,7 @@ if st.button("Récupérer les données →"):
         forests_val, forests_year     = fetch_wb_latest(wb_code, "AG.LND.FRST.ZS")
         renewable_val, renewable_year = fetch_wb_latest(wb_code, "EG.FEC.RNEW.ZS")
 
-        hdi_val, hdi_year = fetch_undp_hdi(country_info["undp_code"])
+        hdi = fetch_undp_hdi(country_info["undp_code"], country_info["name"], country_info["freedom_house_slug"])
 
     # ── Section 1 : En-tête ──
     section_header = []
@@ -412,10 +543,34 @@ if st.button("Récupérer les données →"):
 
     section_header.append(ind("EIU — Democracy Index", "Non disponible", None, None, "EIU", "https://www.eiu.com", "Accès abonnement requis"))
 
-    if hdi_val is not None:
-        section_header.append(ind("IDH — Valeur", f"{float(hdi_val):.3f}", None, hdi_year, "PNUD", undp_url))
+    if hdi.get("value") is not None:
+        section_header.append(ind(
+            "IDH — Valeur",
+            f"{float(hdi['value']):.3f}",
+            None,
+            hdi.get("year"),
+            "PNUD / Human Development Report",
+            hdi.get("source_url", undp_url),
+        ))
+        if hdi.get("rank") is not None:
+            section_header.append(ind(
+                "IDH — Rang mondial",
+                str(hdi["rank"]),
+                None,
+                hdi.get("year"),
+                "PNUD / Human Development Report",
+                hdi.get("source_url", undp_url),
+            ))
     else:
-        section_header.append(ind("IDH — Valeur", "N/D", None, None, "PNUD", undp_url, "API PNUD — vérifier le code pays"))
+        section_header.append(ind(
+            "IDH",
+            "N/D",
+            None,
+            None,
+            "PNUD / Human Development Report",
+            hdi.get("source_url", undp_url),
+            hdi.get("error", "Donnée indisponible"),
+        ))
 
     section_header.append(ind("Statut de revenu (BM)", income_label, None, None, "Banque Mondiale", wb_url_base, ""))
     section_header.append(ind("Région BM", region, None, None, "Banque Mondiale", wb_url_base, ""))
@@ -543,6 +698,5 @@ if st.button("Récupérer les données →"):
                  help="Sélectionnez tout (Ctrl+A) puis copiez (Ctrl+C)")
 
     st.markdown(f'<p class="source-note">📅 Données collectées le {datetime.now().strftime("%d/%m/%Y à %H:%M")} — Toutes les valeurs proviennent de sources officielles vérifiables.</p>', unsafe_allow_html=True)
-
 
    
