@@ -878,6 +878,99 @@ if st.button("Récupérer les données →"):
 
             st.markdown("---")
 
+
+    # ══════════════════════════════════════
+    # Recherche WEO dans le catalogue FMI — temporaire
+    # ══════════════════════════════════════
+    st.markdown("---")
+    st.markdown('<div class="section-title">🔎 Recherche WEO dans le catalogue FMI</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-subtitle">Ce bloc interroge le catalogue SDMX Central du FMI et cherche les dataflows liés au WEO.</div>',
+        unsafe_allow_html=True
+    )
+
+    with st.expander("Afficher les dataflows FMI contenant WEO"):
+        catalog_url = "https://sdmxcentral.imf.org/sdmx/v2/structure/dataflow?detail=allstubs"
+
+        try:
+            r = requests.get(
+                catalog_url,
+                timeout=30,
+                headers={"User-Agent": "Mozilla/5.0"}
+            )
+
+            st.write("URL testée :", catalog_url)
+            st.write("Status :", r.status_code)
+            st.write("Content-Type :", r.headers.get("Content-Type"))
+            st.write("Longueur réponse :", len(r.content))
+
+            r.raise_for_status()
+            data = r.json()
+
+            dataflows = data.get("data", {}).get("dataflows", [])
+            st.write("Nombre total de dataflows :", len(dataflows))
+
+            matches = []
+
+            for flow in dataflows:
+                flow_id = flow.get("id", "")
+                agency = flow.get("agencyID", "")
+
+                name = ""
+                names = flow.get("name", [])
+                if isinstance(names, list) and names:
+                    name = names[0].get("value", "")
+                elif isinstance(names, dict):
+                    name = names.get("en", "") or str(names)
+
+                description = ""
+                descriptions = flow.get("description", [])
+                if isinstance(descriptions, list) and descriptions:
+                    description = descriptions[0].get("value", "")
+                elif isinstance(descriptions, dict):
+                    description = descriptions.get("en", "") or str(descriptions)
+
+                search_text = f"{flow_id} {agency} {name} {description}".lower()
+
+                if (
+                    "weo" in search_text
+                    or "world economic outlook" in search_text
+                    or "economic outlook" in search_text
+                ):
+                    matches.append({
+                        "id": flow_id,
+                        "agency": agency,
+                        "name": name,
+                        "description": description
+                    })
+
+            st.write("Nombre de résultats liés au WEO :", len(matches))
+
+            if matches:
+                st.dataframe(pd.DataFrame(matches), use_container_width=True, hide_index=True)
+            else:
+                st.warning("Aucun dataflow WEO trouvé avec les mots-clés actuels.")
+
+            with st.expander("Aperçu des 30 premiers dataflows", expanded=False):
+                preview = []
+                for flow in dataflows[:30]:
+                    names = flow.get("name", [])
+                    if isinstance(names, list) and names:
+                        name = names[0].get("value", "")
+                    elif isinstance(names, dict):
+                        name = names.get("en", "") or str(names)
+                    else:
+                        name = ""
+                    preview.append({
+                        "id": flow.get("id", ""),
+                        "agency": flow.get("agencyID", ""),
+                        "name": name
+                    })
+                st.dataframe(pd.DataFrame(preview), use_container_width=True, hide_index=True)
+
+        except Exception as e:
+            st.error(f"Erreur recherche catalogue FMI : {e}")
+
     # ══════════════════════════════════════
     # Prompt IA
     # ══════════════════════════════════════
@@ -899,4 +992,4 @@ if st.button("Récupérer les données →"):
     st.text_area("Prompt généré", value=prompt_text, height=420,
                  help="Sélectionnez tout (Ctrl+A) puis copiez (Ctrl+C)")
 
-    st.markdown(f'<p class="source-note">📅 Données collectées le {datetime.now().strftime("%d/%m/%Y à %H:%M")} — Toutes les valeurs proviennent de sources officielles vérifiables.</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="source-note">📅 Données collectées le {datetime.now().strftime("%d/%m/%Y à %H:%M")} — Toutes les valeurs proviennent de sources officielles vérifiables.</p>', un
