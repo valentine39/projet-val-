@@ -407,6 +407,110 @@ def ind(label, value, unit, year, source, url=None, note=None):
 
 
 # ─────────────────────────────────────────────
+# FMI — DataMapper
+# ─────────────────────────────────────────────
+
+IMF_DATAMAPPER_INDICATORS = {
+    "NGDP_RPCH": {
+        "label": "Croissance du PIB réel",
+        "unit": "%",
+        "url_path": "NGDP_RPCH",
+    },
+    "PCPIPCH": {
+        "label": "Inflation moyenne",
+        "unit": "%",
+        "url_path": "PCPIPCH",
+    },
+    "GGXWDG_NGDP": {
+        "label": "Dette publique / PIB",
+        "unit": "% du PIB",
+        "url_path": "GGXWDG_NGDP",
+    },
+    "GGXCNL_NGDP": {
+        "label": "Solde budgétaire / PIB",
+        "unit": "% du PIB",
+        "url_path": "GGXCNL_NGDP",
+    },
+    "BCA_NGDPD": {
+        "label": "Solde courant / PIB",
+        "unit": "% du PIB",
+        "url_path": "BCA_NGDPD",
+    },
+}
+
+
+def fetch_imf_datamapper_latest(country_code, indicator_code):
+    """
+    Récupère la dernière valeur disponible d'un indicateur FMI DataMapper.
+    Les codes pays IMF DataMapper correspondent souvent aux codes ISO3, ce qui marche pour beaucoup de pays,
+    mais certains cas particuliers peuvent renvoyer N/D.
+    """
+    url = f"https://www.imf.org/external/datamapper/api/v2/{indicator_code}/{country_code}"
+
+    try:
+        r = requests.get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
+        r.raise_for_status()
+        data = r.json()
+
+        values = (
+            data.get("values", {})
+            .get(indicator_code, {})
+            .get(country_code, {})
+        )
+
+        if not values:
+            return None, None
+
+        cleaned = {}
+        for year, value in values.items():
+            try:
+                cleaned[int(year)] = float(value)
+            except Exception:
+                continue
+
+        if not cleaned:
+            return None, None
+
+        latest_year = max(cleaned.keys())
+        return cleaned[latest_year], latest_year
+
+    except Exception:
+        return None, None
+
+
+def build_imf_macro_section(country_code):
+    rows = []
+
+    for indicator_code, meta in IMF_DATAMAPPER_INDICATORS.items():
+        value, year = fetch_imf_datamapper_latest(country_code, indicator_code)
+
+        source_url = f"https://www.imf.org/external/datamapper/{indicator_code}@WEO/{country_code}"
+
+        if value is None:
+            rows.append(ind(
+                meta["label"],
+                "N/D",
+                meta["unit"],
+                None,
+                "FMI DataMapper",
+                "https://www.imf.org/external/datamapper/",
+                "Donnée non disponible via DataMapper pour ce pays ou cet indicateur"
+            ))
+        else:
+            rows.append(ind(
+                meta["label"],
+                f"{value:.1f}",
+                meta["unit"],
+                year,
+                "FMI DataMapper",
+                source_url,
+                None
+            ))
+
+    return rows
+
+
+# ─────────────────────────────────────────────
 # Construction du prompt IA
 # ─────────────────────────────────────────────
 
@@ -503,6 +607,7 @@ if st.button("Récupérer les données →"):
         renewable_val, renewable_year = fetch_wb_latest(wb_code, "EG.FEC.RNEW.ZS")
 
         hdi = fetch_undp_hdi(country_info["undp_code"], country_info["name"])
+        imf_macro_section = build_imf_macro_section(wb_code)
 
     # ── Section 1 : En-tête ──
     section_header = []
@@ -624,6 +729,10 @@ if st.button("Récupérer les données →"):
         "Seuil de pauvreté extrême et distribution des revenus — Source : Banque Mondiale",
         section_poverty, wb_url_base, "Banque Mondiale")
 
+    show_section("📘 FMI — Macroéconomie",
+        "Croissance, inflation, dette publique, solde budgétaire et compte courant — Source : FMI DataMapper",
+        imf_macro_section, "https://www.imf.org/external/datamapper/", "FMI DataMapper")
+
     show_section("🎓 Éducation",
         "Taux de scolarisation bruts par niveau — Source : Banque Mondiale / UNESCO",
         section_education, wb_url_base, "Banque Mondiale / UNESCO")
@@ -644,6 +753,7 @@ if st.button("Récupérer les données →"):
         "Gouvernance WGI": section_governance,
         "Marché du travail": section_labour,
         "Pauvreté et inégalités": section_poverty,
+        "FMI — Macroéconomie": imf_macro_section,
         "Éducation": section_education,
         "Climat et environnement": section_climate,
     }
@@ -654,4 +764,3 @@ if st.button("Récupérer les données →"):
 
     st.markdown(f'<p class="source-note">📅 Données collectées le {datetime.now().strftime("%d/%m/%Y à %H:%M")} — Toutes les valeurs proviennent de sources officielles vérifiables.</p>', unsafe_allow_html=True)
 
-   
