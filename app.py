@@ -801,21 +801,31 @@ if st.button("Récupérer les données →"):
             st.markdown("---")
 
 
+
     # ══════════════════════════════════════
-    # Debug IMF Data API officielle — temporaire
+    # Debug IMF WEO — API SDMX officielle — temporaire
     # ══════════════════════════════════════
     st.markdown("---")
-    st.markdown('<div class="section-title">🔎 Debug IMF Data API officielle — temporaire</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">🔎 Debug FMI WEO — API SDMX officielle</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="section-subtitle">Ce bloc teste l’accès à api.imf.org, l’API officielle SDMX du FMI. '
-        'Il sert à vérifier si cette voie est utilisable depuis l’environnement Streamlit.</div>',
+        '<div class="section-subtitle">Ce bloc teste les endpoints SDMX orientés WEO. '
+        'Il sert à identifier le bon dataflow WEO avant d’extraire les séries.</div>',
         unsafe_allow_html=True
     )
 
-    with st.expander("Afficher le diagnostic technique IMF Data API officielle"):
+    with st.expander("Afficher le diagnostic technique IMF WEO"):
         test_urls = [
-            "https://api.imf.org/external/sdmx/2.1/dataflow/IMF",
-            "https://api.imf.org/external/sdmx/3.0/structure/dataflow/IMF",
+            # Catalogue général des dataflows
+            "https://api.imf.org/external/sdmx/3.0/structure/dataflow?detail=allstubs",
+
+            # Dataflows WEO selon le nouvel identifiant IMF.RES:WEO
+            "https://api.imf.org/external/sdmx/3.0/structure/dataflow/IMF.RES/WEO/*?detail=allstubs",
+
+            # Endpoint SDMX Central, parfois plus bavard que api.imf.org
+            "https://sdmxcentral.imf.org/sdmx/v2/structure/dataflow/IMF.RES/WEO/*?detail=allstubs",
+
+            # Fallback SDMX Central catalogue général
+            "https://sdmxcentral.imf.org/sdmx/v2/structure/dataflow?detail=allstubs",
         ]
 
         for test_url in test_urls:
@@ -827,26 +837,41 @@ if st.button("Récupérer les données →"):
                     timeout=30,
                     headers={
                         "User-Agent": "Mozilla/5.0",
-                        "Accept": "application/json"
+                        "Accept": "application/vnd.sdmx.structure+json;version=1.0.0, application/json, application/xml, text/xml, */*",
                     }
                 )
 
                 st.write("Status :", r.status_code)
                 st.write("Content-Type :", r.headers.get("Content-Type"))
+                st.write("Longueur réponse :", len(r.content))
 
+                if r.status_code == 204 or len(r.content) == 0:
+                    st.warning("Réponse vide : endpoint accessible mais sans contenu pour cette requête.")
+                    st.markdown("---")
+                    continue
+
+                content_type = (r.headers.get("Content-Type") or "").lower()
+
+                # Essayer JSON d'abord
                 try:
                     data = r.json()
                     if isinstance(data, dict):
                         st.write("Clés principales :", list(data.keys()))
                     else:
-                        st.write("Type de réponse :", type(data))
+                        st.write("Type de réponse JSON :", type(data))
 
                     with st.expander(f"JSON brut — {test_url}", expanded=False):
                         st.json(data)
 
-                except Exception as e:
-                    st.write("Pas de JSON lisible :", e)
-                    st.text(r.text[:3000])
+                except Exception:
+                    text_preview = r.text[:5000]
+                    st.write("Réponse non JSON — aperçu texte/XML :")
+                    st.text(text_preview)
+
+                    # Petit repérage textuel des occurrences WEO / dataflow
+                    upper_text = r.text.upper()
+                    st.write("Occurrences 'WEO' :", upper_text.count("WEO"))
+                    st.write("Occurrences 'DATAFLOW' :", upper_text.count("DATAFLOW"))
 
             except Exception as e:
                 st.write("Erreur requête :", e)
