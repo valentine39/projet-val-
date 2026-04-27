@@ -406,96 +406,300 @@ def ind(label, value, unit, year, source, url=None, note=None):
     }
 
 
+
 # ─────────────────────────────────────────────
-# FMI — DataMapper
+# Article IV FMI — extraction depuis PDF uploadé
 # ─────────────────────────────────────────────
 
-IMF_DATAMAPPER_INDICATORS = {
-    "NGDP_RPCH": {"label": "Croissance du PIB réel", "unit": "%"},
-    "PCPIPCH": {"label": "Inflation moyenne", "unit": "%"},
-    "GGXWDG_NGDP": {"label": "Dette publique / PIB", "unit": "% du PIB"},
-    "GGXCNL_NGDP": {"label": "Solde budgétaire / PIB", "unit": "% du PIB"},
-    "BCA_NGDPD": {"label": "Solde courant / PIB", "unit": "% du PIB"},
+ARTICLE_IV_THEMES = {
+    "Croissance et activité": [
+        "growth", "real gdp", "gdp growth", "output", "economic activity",
+        "domestic demand", "consumption", "investment", "recovery", "potential growth"
+    ],
+    "Inflation et politique monétaire": [
+        "inflation", "consumer prices", "monetary policy", "policy rate",
+        "central bank", "exchange rate", "real interest", "liquidity"
+    ],
+    "Finances publiques": [
+        "fiscal", "budget", "overall balance", "primary balance", "revenue",
+        "tax", "expenditure", "wage bill", "subsidies", "public investment"
+    ],
+    "Dette publique et soutenabilité": [
+        "public debt", "debt sustainability", "debt-to-gdp", "debt service",
+        "interest payments", "arrears", "dsf", "dsa", "sovereign"
+    ],
+    "Comptes externes": [
+        "current account", "trade balance", "exports", "imports", "remittances",
+        "foreign direct investment", "fdi", "external financing", "balance of payments"
+    ],
+    "Liquidité externe et réserves": [
+        "international reserves", "foreign reserves", "reserve coverage",
+        "months of imports", "external debt", "short-term debt", "gross reserves"
+    ],
+    "Système financier et banques": [
+        "financial sector", "banking sector", "capital adequacy", "npl",
+        "nonperforming loans", "loan-to-deposit", "profitability", "roe", "roa",
+        "credit growth", "private sector credit", "liquidity ratio"
+    ],
+    "Risques et recommandations FMI": [
+        "risks", "downside risks", "policy recommendations", "staff recommends",
+        "authorities should", "structural reforms", "outlook", "vulnerabilities"
+    ],
+    "Climat et vulnérabilités structurelles": [
+        "climate", "natural disaster", "resilience", "adaptation", "mitigation",
+        "food security", "energy", "commodity prices", "fragility"
+    ],
 }
 
 
-def fetch_imf_datamapper_latest(country_code, indicator_code):
+def _safe_import_pdfplumber():
+    try:
+        import pdfplumber
+        return pdfplumber, None
+    except Exception as e:
+        return None, str(e)
+
+
+def extract_article_iv_pages(uploaded_pdf):
     """
-    Récupère la dernière valeur disponible d'un indicateur FMI DataMapper.
-    Méthode robuste : on appelle l'endpoint indicateur complet, puis on cherche
-    le pays dans le JSON retourné. country_code = ISO3, ex. FRA, TLS, KEN.
+    Extrait le texte page par page d'un PDF Article IV.
+    Fonctionne surtout pour les PDFs FMI numériques. Les PDFs scannés nécessitent de l'OCR.
     """
-    country_code = str(country_code).upper().strip()
-    urls_to_try = [
-        f"https://www.imf.org/external/datamapper/api/v1/{indicator_code}",
-        f"https://www.imf.org/external/datamapper/api/v2/{indicator_code}",
-    ]
+    pdfplumber, error = _safe_import_pdfplumber()
+    if error:
+        return [], f"pdfplumber indisponible : {error}. Ajoutez pdfplumber dans requirements.txt."
 
-    for url in urls_to_try:
-        try:
-            r = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
-            r.raise_for_status()
-            data = r.json()
-
-            values = data.get("values", {}).get(indicator_code, {})
-            country_values = values.get(country_code)
-
-            # Fallback : recherche insensible à la casse
-            if country_values is None:
-                for k, v in values.items():
-                    if str(k).upper() == country_code:
-                        country_values = v
-                        break
-
-            if not country_values:
-                continue
-
-            cleaned = {}
-            for year, value in country_values.items():
-                try:
-                    cleaned[int(year)] = float(value)
-                except Exception:
-                    continue
-
-            if cleaned:
-                latest_year = max(cleaned.keys())
-                return cleaned[latest_year], latest_year, url
-
-        except Exception:
-            continue
-
-    return None, None, "https://www.imf.org/external/datamapper/"
+    try:
+        uploaded_pdf.seek(0)
+        pages = []
+        with pdfplumber.open(uploaded_pdf) as pdf:
+            for page_number, page in enumerate(pdf.pages, start=1):
+                text = page.extract_text(x_tolerance=1, y_tolerance=3) or ""
+                if text.strip():
+                    pages.append({"page": page_number, "text": text})
+        return pages, None
+    except Exception as e:
+        return [], f"Erreur extraction texte PDF : {e}"
 
 
-def build_imf_macro_section(country_code):
+def extract_article_iv_tables(uploaded_pdf, max_tables=30):
+    """
+    Extrait les tableaux détectés dans le PDF. Les tableaux FMI complexes peuvent nécessiter
+    une vérification manuelle : cette extraction sert surtout à repérer les tableaux utiles.
+    """
+    pdfplumber, error = _safe_import_pdfplumber()
+    if error:
+        return [], f"pdfplumber indisponible : {error}. Ajoutez pdfplumber dans requirements.txt."
+
+    try:
+        uploaded_pdf.seek(0)
+        tables_out = []
+        with pdfplumber.open(uploaded_pdf) as pdf:
+            for page_number, page in enumerate(pdf.pages, start=1):
+                tables = page.extract_tables() or []
+                for table_id, table in enumerate(tables, start=1):
+                    if not table or len(table) < 2:
+                        continue
+
+                    # Nettoyage minimal
+                    cleaned = []
+                    for row in table:
+                        cleaned.append([
+                            re.sub(r"\s+", " ", str(cell)).strip() if cell is not None else ""
+                            for cell in row
+                        ])
+
+                    header = cleaned[0]
+                    body = cleaned[1:]
+
+                    # Évite les tableaux illisibles vides
+                    non_empty_cells = sum(1 for row in cleaned for cell in row if cell)
+                    if non_empty_cells < 6:
+                        continue
+
+                    try:
+                        df = pd.DataFrame(body, columns=header)
+                    except Exception:
+                        df = pd.DataFrame(cleaned)
+
+                    tables_out.append({
+                        "page": page_number,
+                        "table_id": table_id,
+                        "data": df
+                    })
+
+                    if len(tables_out) >= max_tables:
+                        return tables_out, None
+
+        return tables_out, None
+    except Exception as e:
+        return [], f"Erreur extraction tableaux PDF : {e}"
+
+
+def _extract_relevant_excerpt(text, keyword, window=900):
+    text_norm = re.sub(r"\s+", " ", text)
+    idx = text_norm.lower().find(keyword.lower())
+    if idx == -1:
+        return text_norm[:window]
+    start = max(0, idx - window // 2)
+    end = min(len(text_norm), idx + window // 2)
+    return text_norm[start:end].strip()
+
+
+def find_article_iv_theme_mentions(pages, max_hits_per_theme=4):
+    """
+    Repère les pages et extraits associés à chaque thème. On travaille par thèmes, pas par
+    indicateur strict, parce que les Article IV n'ont pas un format parfaitement standardisé.
+    """
     rows = []
 
-    for indicator_code, meta in IMF_DATAMAPPER_INDICATORS.items():
-        value, year, source_url = fetch_imf_datamapper_latest(country_code, indicator_code)
+    for theme, keywords in ARTICLE_IV_THEMES.items():
+        hits = []
+        for page in pages:
+            text_lower = page["text"].lower()
+            found_keyword = None
+            for kw in keywords:
+                if kw.lower() in text_lower:
+                    found_keyword = kw
+                    break
 
-        if value is None:
-            rows.append(ind(
-                meta["label"],
-                "N/D",
-                meta["unit"],
-                None,
-                "FMI DataMapper",
-                "https://www.imf.org/external/datamapper/",
-                "Donnée non disponible via DataMapper pour ce pays ou cet indicateur"
-            ))
-        else:
-            rows.append(ind(
-                meta["label"],
-                f"{value:.1f}",
-                meta["unit"],
-                year,
-                "FMI DataMapper",
-                source_url,
-                None
-            ))
+            if found_keyword:
+                hits.append({
+                    "Thème": theme,
+                    "Page": page["page"],
+                    "Mot-clé détecté": found_keyword,
+                    "Extrait": _extract_relevant_excerpt(page["text"], found_keyword, window=1000)
+                })
 
-    return rows
+            if len(hits) >= max_hits_per_theme:
+                break
 
+        rows.extend(hits)
+
+    return pd.DataFrame(rows)
+
+
+def find_article_iv_numeric_sentences(pages, max_rows=80):
+    """
+    Repère des phrases utiles contenant des chiffres macro (% du PIB, points, USD, mois d'importations, etc.).
+    Ce n'est pas une extraction définitive : c'est une aide au repérage.
+    """
+    macro_words = [
+        "gdp", "growth", "inflation", "debt", "deficit", "balance", "current account",
+        "revenue", "expenditure", "reserves", "imports", "exports", "credit", "npl",
+        "capital adequacy", "fiscal", "primary", "public", "external"
+    ]
+
+    numeric_pattern = re.compile(
+        r"(\d+(?:[.,]\d+)?\s?(?:percent|per cent|%|percentage points|pp|months|billion|million|usd|us\$))",
+        re.IGNORECASE
+    )
+
+    rows = []
+    for page in pages:
+        text = re.sub(r"\s+", " ", page["text"])
+        sentences = re.split(r"(?<=[.!?])\s+", text)
+
+        for sent in sentences:
+            sent_lower = sent.lower()
+            if numeric_pattern.search(sent) and any(w in sent_lower for w in macro_words):
+                rows.append({
+                    "Page": page["page"],
+                    "Phrase avec donnée chiffrée": sent.strip()[:700]
+                })
+
+            if len(rows) >= max_rows:
+                return pd.DataFrame(rows)
+
+    return pd.DataFrame(rows)
+
+
+def score_article_iv_tables(tables):
+    """
+    Classe les tableaux extraits selon leur probabilité d'intérêt macro.
+    """
+    table_keywords = [
+        "gdp", "growth", "inflation", "fiscal", "revenue", "expenditure",
+        "debt", "current account", "exports", "imports", "reserves",
+        "balance", "bank", "credit", "npl", "capital", "external"
+    ]
+
+    rows = []
+    for item in tables:
+        df = item["data"]
+        text = " ".join(df.astype(str).fillna("").values.flatten().tolist()).lower()
+        score = sum(1 for kw in table_keywords if kw in text)
+
+        if score > 0:
+            preview = " | ".join(df.head(3).astype(str).fillna("").values.flatten().tolist())
+            rows.append({
+                "Page": item["page"],
+                "Table": item["table_id"],
+                "Score pertinence": score,
+                "Aperçu": preview[:500]
+            })
+
+    if not rows:
+        return pd.DataFrame()
+
+    return pd.DataFrame(rows).sort_values("Score pertinence", ascending=False)
+
+
+def build_article_iv_prompt(country_name, mentions_df, numeric_df, table_scores_df):
+    """
+    Construit un prompt IA distinct du prompt de données quantitatives.
+    Il demande une extraction prudente et vérifiable à partir du PDF.
+    """
+    lines = [
+        f"ARTICLE IV FMI — {country_name}",
+        "=" * 60,
+        "",
+        "Tu es un analyste risque pays. À partir des extraits d'un rapport Article IV du FMI,",
+        "identifie les informations macroéconomiques saillantes et les points d'attention.",
+        "",
+        "RÈGLES :",
+        "- Ne pas inventer de chiffres.",
+        "- Si une donnée n'est pas explicitement présente dans les extraits, dire qu'elle n'est pas disponible.",
+        "- Citer les pages mentionnées dans les extraits.",
+        "- Distinguer données observées, prévisions FMI et recommandations FMI lorsque c'est possible.",
+        "- Ne pas chercher une précision illusoire : les tableaux PDF peuvent être mal extraits.",
+        "",
+        "FORMAT ATTENDU :",
+        "1. Croissance, inflation et régime de croissance",
+        "2. Finances publiques et dette",
+        "3. Comptes externes et réserves",
+        "4. Système financier",
+        "5. Risques principaux et recommandations du FMI",
+        "",
+        "=" * 60,
+        "",
+    ]
+
+    if mentions_df is not None and not mentions_df.empty:
+        lines.append("EXTRAITS PAR THÈME")
+        for _, row in mentions_df.head(30).iterrows():
+            lines.append(
+                f"- {row['Thème']} | page {row['Page']} | mot-clé : {row['Mot-clé détecté']}\n"
+                f"  Extrait : {row['Extrait']}"
+            )
+        lines.append("")
+
+    if numeric_df is not None and not numeric_df.empty:
+        lines.append("PHRASES AVEC DONNÉES CHIFFRÉES")
+        for _, row in numeric_df.head(40).iterrows():
+            lines.append(f"- Page {row['Page']} : {row['Phrase avec donnée chiffrée']}")
+        lines.append("")
+
+    if table_scores_df is not None and not table_scores_df.empty:
+        lines.append("TABLEAUX POTENTIELLEMENT UTILES")
+        for _, row in table_scores_df.head(15).iterrows():
+            lines.append(
+                f"- Page {row['Page']}, tableau {row['Table']} "
+                f"(score {row['Score pertinence']}) : {row['Aperçu']}"
+            )
+        lines.append("")
+
+    return "\n".join(lines)
 
 # ─────────────────────────────────────────────
 # Construction du prompt IA
@@ -559,6 +763,12 @@ wb_code = country_info["world_bank_code"]
 wb_url_base = f"https://data.worldbank.org/country/{country_info['wb_url_code']}"
 undp_url = f"https://hdr.undp.org/data-center/specific-country-data#/countries/{country_info['undp_code']}"
 
+uploaded_article_iv = st.file_uploader(
+    "Article IV FMI (optionnel) — déposer un PDF",
+    type=["pdf"],
+    help="Ajoutez ici un rapport Article IV du FMI. L'app extraira le texte, les passages macro et les tableaux détectables."
+)
+
 st.write("")
 
 if st.button("Récupérer les données →"):
@@ -594,7 +804,6 @@ if st.button("Récupérer les données →"):
         renewable_val, renewable_year = fetch_wb_latest(wb_code, "EG.FEC.RNEW.ZS")
 
         hdi = fetch_undp_hdi(country_info["undp_code"], country_info["name"])
-        imf_macro_section = build_imf_macro_section(wb_code)
 
     # ── Section 1 : En-tête ──
     section_header = []
@@ -716,10 +925,6 @@ if st.button("Récupérer les données →"):
         "Seuil de pauvreté extrême et distribution des revenus — Source : Banque Mondiale",
         section_poverty, wb_url_base, "Banque Mondiale")
 
-    show_section("📘 FMI — Macroéconomie",
-        "Croissance, inflation, dette publique, solde budgétaire et compte courant — Source : FMI DataMapper",
-        imf_macro_section, "https://www.imf.org/external/datamapper/", "FMI DataMapper")
-
     show_section("🎓 Éducation",
         "Taux de scolarisation bruts par niveau — Source : Banque Mondiale / UNESCO",
         section_education, wb_url_base, "Banque Mondiale / UNESCO")
@@ -728,297 +933,99 @@ if st.button("Récupérer les données →"):
         "Émissions CO₂, forêts, mix énergétique — Source : Banque Mondiale · FAO · AIE · ND-Gain · NHM",
         section_climate, wb_url_base, "Banque Mondiale · FAO · AIE")
 
+    # ══════════════════════════════════════
+    # Article IV FMI — PDF uploadé
+    # ══════════════════════════════════════
+    article_iv_prompt_text = None
 
-    # ══════════════════════════════════════
-    # Debug FMI — temporaire
-    # ══════════════════════════════════════
     st.markdown("---")
-    st.markdown('<div class="section-title">🔎 Debug FMI — temporaire</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">📄 Article IV FMI — extraction depuis PDF</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="section-subtitle">Ce bloc sert à comprendre pourquoi FMI DataMapper renvoie N/D. '
-        'Tu peux le supprimer une fois le problème identifié.</div>',
+        '<div class="section-subtitle">Déposez un rapport Article IV pour repérer les passages macro, les phrases chiffrées et les tableaux utiles. '
+        'L’extraction reste indicative : les PDFs FMI ne sont pas parfaitement standardisés.</div>',
         unsafe_allow_html=True
     )
 
-    with st.expander("Afficher le diagnostic technique FMI"):
-        test_indicator = "NGDP_RPCH"
-        test_urls = [
-            f"https://www.imf.org/external/datamapper/api/v2/{test_indicator}/{wb_code}",
-            f"https://www.imf.org/external/datamapper/api/v1/{test_indicator}/{wb_code}",
-            f"https://www.imf.org/external/datamapper/api/v2/{test_indicator}",
-            f"https://www.imf.org/external/datamapper/api/v1/{test_indicator}",
-        ]
+    if uploaded_article_iv is None:
+        st.markdown(
+            '<p class="warn-missing">Aucun PDF Article IV déposé. Cette section est optionnelle.</p>',
+            unsafe_allow_html=True
+        )
+    else:
+        st.success(f"PDF chargé : {uploaded_article_iv.name}")
 
-        for test_url in test_urls:
-            st.write("URL testée :", test_url)
-            try:
-                r = requests.get(
-                    test_url,
-                    timeout=30,
-                    headers={"User-Agent": "Mozilla/5.0"}
+        pages_text, text_error = extract_article_iv_pages(uploaded_article_iv)
+
+        if text_error:
+            st.error(text_error)
+        else:
+            st.write("Pages avec texte extrait :", len(pages_text))
+
+            mentions_df = find_article_iv_theme_mentions(pages_text)
+            numeric_df = find_article_iv_numeric_sentences(pages_text)
+
+            uploaded_article_iv.seek(0)
+            tables, table_error = extract_article_iv_tables(uploaded_article_iv)
+            if table_error:
+                st.warning(table_error)
+                tables = []
+
+            table_scores_df = score_article_iv_tables(tables)
+
+            col_pdf_1, col_pdf_2, col_pdf_3 = st.columns(3)
+            with col_pdf_1:
+                st.metric("Pages texte", len(pages_text))
+            with col_pdf_2:
+                st.metric("Tableaux détectés", len(tables))
+            with col_pdf_3:
+                st.metric("Passages thématiques", 0 if mentions_df.empty else len(mentions_df))
+
+            st.markdown("### Passages macro détectés")
+            if mentions_df.empty:
+                st.markdown('<p class="warn-missing">Aucun passage macro détecté automatiquement.</p>', unsafe_allow_html=True)
+            else:
+                st.dataframe(mentions_df, use_container_width=True, hide_index=True)
+
+            st.markdown("### Phrases chiffrées à vérifier")
+            if numeric_df.empty:
+                st.markdown('<p class="warn-missing">Aucune phrase chiffrée détectée automatiquement.</p>', unsafe_allow_html=True)
+            else:
+                st.dataframe(numeric_df, use_container_width=True, hide_index=True)
+
+            st.markdown("### Tableaux probablement utiles")
+            if table_scores_df.empty:
+                st.markdown('<p class="warn-missing">Aucun tableau macro clairement détecté.</p>', unsafe_allow_html=True)
+            else:
+                st.dataframe(table_scores_df, use_container_width=True, hide_index=True)
+
+            with st.expander("Voir les tableaux extraits du PDF"):
+                if not tables:
+                    st.write("Aucun tableau extrait.")
+                else:
+                    for item in tables[:15]:
+                        st.markdown(f"**Page {item['page']} — Tableau {item['table_id']}**")
+                        st.dataframe(item["data"], use_container_width=True)
+
+            with st.expander("Voir le texte extrait du PDF"):
+                full_text = "\n\n".join(
+                    [f"--- Page {p['page']} ---\n{p['text']}" for p in pages_text]
                 )
+                st.text_area("Texte extrait", value=full_text[:50000], height=420)
 
-                st.write("Status :", r.status_code)
-                st.write("Content-Type :", r.headers.get("Content-Type"))
-
-                try:
-                    data = r.json()
-                    st.write("Clés principales :", list(data.keys()))
-
-                    values = data.get("values", {})
-                    if isinstance(values, dict):
-                        st.write("Clés dans values :", list(values.keys())[:10])
-
-                        indicator_values = values.get(test_indicator, {})
-                        if isinstance(indicator_values, dict):
-                            st.write(
-                                f"Premières clés pays pour {test_indicator} :",
-                                list(indicator_values.keys())[:30]
-                            )
-
-                            if wb_code in indicator_values:
-                                st.write(f"✅ Le code pays {wb_code} existe dans la réponse FMI.")
-                                st.json(indicator_values[wb_code])
-                            else:
-                                st.write(f"⚠️ Le code pays {wb_code} n'apparaît pas tel quel dans la réponse.")
-                                matching = [
-                                    k for k in indicator_values.keys()
-                                    if wb_code.upper() in str(k).upper()
-                                    or country_info["name"].upper().replace(" ", "") in str(k).upper().replace(" ", "")
-                                ]
-                                st.write("Clés proches trouvées :", matching[:20])
-
-                    with st.expander(f"JSON brut — {test_url}", expanded=False):
-                        st.json(data)
-
-                except Exception as e:
-                    st.write("Erreur parsing JSON :", e)
-                    st.text(r.text[:2000])
-
-            except Exception as e:
-                st.write("Erreur requête :", e)
-
-            st.markdown("---")
-
-
-
-    # ══════════════════════════════════════
-    # Debug IMF WEO — API SDMX officielle — temporaire
-    # ══════════════════════════════════════
-    st.markdown("---")
-    st.markdown('<div class="section-title">🔎 Debug FMI WEO — API SDMX officielle</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="section-subtitle">Ce bloc teste les endpoints SDMX orientés WEO. '
-        'Il sert à identifier le bon dataflow WEO avant d’extraire les séries.</div>',
-        unsafe_allow_html=True
-    )
-
-    with st.expander("Afficher le diagnostic technique IMF WEO"):
-        test_urls = [
-            # Catalogue général des dataflows
-            "https://api.imf.org/external/sdmx/3.0/structure/dataflow?detail=allstubs",
-
-            # Dataflows WEO selon le nouvel identifiant IMF.RES:WEO
-            "https://api.imf.org/external/sdmx/3.0/structure/dataflow/IMF.RES/WEO/*?detail=allstubs",
-
-            # Endpoint SDMX Central, parfois plus bavard que api.imf.org
-            "https://sdmxcentral.imf.org/sdmx/v2/structure/dataflow/IMF.RES/WEO/*?detail=allstubs",
-
-            # Fallback SDMX Central catalogue général
-            "https://sdmxcentral.imf.org/sdmx/v2/structure/dataflow?detail=allstubs",
-        ]
-
-        for test_url in test_urls:
-            st.write("URL testée :", test_url)
-
-            try:
-                r = requests.get(
-                    test_url,
-                    timeout=30,
-                    headers={
-                        "User-Agent": "Mozilla/5.0",
-                        "Accept": "application/vnd.sdmx.structure+json;version=1.0.0, application/json, application/xml, text/xml, */*",
-                    }
-                )
-
-                st.write("Status :", r.status_code)
-                st.write("Content-Type :", r.headers.get("Content-Type"))
-                st.write("Longueur réponse :", len(r.content))
-
-                if r.status_code == 204 or len(r.content) == 0:
-                    st.warning("Réponse vide : endpoint accessible mais sans contenu pour cette requête.")
-                    st.markdown("---")
-                    continue
-
-                content_type = (r.headers.get("Content-Type") or "").lower()
-
-                # Essayer JSON d'abord
-                try:
-                    data = r.json()
-                    if isinstance(data, dict):
-                        st.write("Clés principales :", list(data.keys()))
-                    else:
-                        st.write("Type de réponse JSON :", type(data))
-
-                    with st.expander(f"JSON brut — {test_url}", expanded=False):
-                        st.json(data)
-
-                except Exception:
-                    text_preview = r.text[:5000]
-                    st.write("Réponse non JSON — aperçu texte/XML :")
-                    st.text(text_preview)
-
-                    # Petit repérage textuel des occurrences WEO / dataflow
-                    upper_text = r.text.upper()
-                    st.write("Occurrences 'WEO' :", upper_text.count("WEO"))
-                    st.write("Occurrences 'DATAFLOW' :", upper_text.count("DATAFLOW"))
-
-            except Exception as e:
-                st.write("Erreur requête :", e)
-
-            st.markdown("---")
-
-
-
-    # ══════════════════════════════════════
-    # Recherche WEO dans le catalogue FMI — temporaire
-    # ══════════════════════════════════════
-    st.markdown("---")
-    st.markdown('<div class="section-title">🔎 Recherche WEO dans le catalogue FMI</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="section-subtitle">Ce bloc interroge le catalogue SDMX Central du FMI et cherche les dataflows liés au WEO. '
-        'Il accepte les réponses XML ou JSON.</div>',
-        unsafe_allow_html=True
-    )
-
-    with st.expander("Afficher les dataflows FMI contenant WEO"):
-        import xml.etree.ElementTree as ET
-
-        catalog_url = "https://sdmxcentral.imf.org/sdmx/v2/structure/dataflow?detail=allstubs"
-
-        try:
-            r = requests.get(
-                catalog_url,
-                timeout=30,
-                headers={
-                    "User-Agent": "Mozilla/5.0",
-                    "Accept": "application/xml,text/xml,application/json,*/*"
-                }
+            article_iv_prompt_text = build_article_iv_prompt(
+                selected_name,
+                mentions_df,
+                numeric_df,
+                table_scores_df
             )
 
-            st.write("URL testée :", catalog_url)
-            st.write("Status :", r.status_code)
-            st.write("Content-Type :", r.headers.get("Content-Type"))
-            st.write("Longueur réponse :", len(r.content))
-
-            r.raise_for_status()
-
-            content_type = (r.headers.get("Content-Type") or "").lower()
-            matches = []
-            preview = []
-
-            if "json" in content_type:
-                data = r.json()
-                dataflows = data.get("data", {}).get("dataflows", [])
-                st.write("Format détecté : JSON")
-                st.write("Nombre total de dataflows :", len(dataflows))
-
-                for flow in dataflows:
-                    flow_id = flow.get("id", "")
-                    agency = flow.get("agencyID", "")
-
-                    name = ""
-                    names = flow.get("name", [])
-                    if isinstance(names, list) and names:
-                        name = names[0].get("value", "")
-                    elif isinstance(names, dict):
-                        name = names.get("en", "") or str(names)
-
-                    description = ""
-                    descriptions = flow.get("description", [])
-                    if isinstance(descriptions, list) and descriptions:
-                        description = descriptions[0].get("value", "")
-                    elif isinstance(descriptions, dict):
-                        description = descriptions.get("en", "") or str(descriptions)
-
-                    item = {
-                        "id": flow_id,
-                        "agency": agency,
-                        "name": name,
-                        "description": description
-                    }
-
-                    if len(preview) < 30:
-                        preview.append(item)
-
-                    search_text = f"{flow_id} {agency} {name} {description}".lower()
-                    if "weo" in search_text or "world economic outlook" in search_text or "economic outlook" in search_text:
-                        matches.append(item)
-
-            else:
-                st.write("Format détecté : XML")
-                root = ET.fromstring(r.content)
-
-                # Namespaces SDMX les plus fréquents
-                namespaces = {
-                    "str": "http://www.sdmx.org/resources/sdmxml/schemas/v2_1/structure",
-                    "com": "http://www.sdmx.org/resources/sdmxml/schemas/v2_1/common",
-                }
-
-                # Recherche souple : tous les éléments dont le nom local est Dataflow
-                dataflows = []
-                for elem in root.iter():
-                    if elem.tag.endswith("Dataflow"):
-                        dataflows.append(elem)
-
-                st.write("Nombre total de dataflows :", len(dataflows))
-
-                for flow in dataflows:
-                    flow_id = flow.attrib.get("id", "")
-                    agency = flow.attrib.get("agencyID", "") or flow.attrib.get("agency", "")
-
-                    name = ""
-                    description = ""
-
-                    for child in flow.iter():
-                        local = child.tag.split("}")[-1]
-                        if local == "Name" and not name:
-                            name = (child.text or "").strip()
-                        elif local == "Description" and not description:
-                            description = (child.text or "").strip()
-
-                    item = {
-                        "id": flow_id,
-                        "agency": agency,
-                        "name": name,
-                        "description": description
-                    }
-
-                    if len(preview) < 30:
-                        preview.append(item)
-
-                    search_text = f"{flow_id} {agency} {name} {description}".lower()
-                    if "weo" in search_text or "world economic outlook" in search_text or "economic outlook" in search_text:
-                        matches.append(item)
-
-            st.write("Nombre de résultats liés au WEO :", len(matches))
-
-            if matches:
-                st.dataframe(pd.DataFrame(matches), use_container_width=True, hide_index=True)
-            else:
-                st.warning("Aucun dataflow WEO trouvé avec les mots-clés actuels.")
-
-            with st.expander("Aperçu des 30 premiers dataflows", expanded=False):
-                if preview:
-                    st.dataframe(pd.DataFrame(preview), use_container_width=True, hide_index=True)
-                else:
-                    st.write("Aucun aperçu disponible.")
-
-            with st.expander("Aperçu brut de la réponse FMI", expanded=False):
-                st.text(r.text[:5000])
-
-        except Exception as e:
-            st.error(f"Erreur recherche catalogue FMI : {e}")
+            st.markdown("### Prompt IA — Article IV")
+            st.text_area(
+                "Prompt Article IV généré",
+                value=article_iv_prompt_text,
+                height=360,
+                help="Copiez ce prompt dans une IA pour obtenir une extraction structurée du rapport FMI."
+            )
 
     # ══════════════════════════════════════
     # Prompt IA
@@ -1032,13 +1039,27 @@ if st.button("Récupérer les données →"):
         "Gouvernance WGI": section_governance,
         "Marché du travail": section_labour,
         "Pauvreté et inégalités": section_poverty,
-        "FMI — Macroéconomie": imf_macro_section,
         "Éducation": section_education,
         "Climat et environnement": section_climate,
     }
 
     prompt_text = build_ai_prompt(selected_name, all_sections_prompt)
+
+    if article_iv_prompt_text:
+        prompt_text = (
+            prompt_text
+            + "\n\n"
+            + "=" * 52
+            + "\n"
+            + "COMPLÉMENT ARTICLE IV FMI\n"
+            + "=" * 52
+            + "\n\n"
+            + article_iv_prompt_text
+        )
+
     st.text_area("Prompt généré", value=prompt_text, height=420,
                  help="Sélectionnez tout (Ctrl+A) puis copiez (Ctrl+C)")
+
+    st.markdown(f'<p class="source-note">📅 Données collectées le {datetime.now().strftime("%d/%m/%Y à %H:%M")} — Toutes les valeurs proviennent de sources officielles vérifiables.</p>', unsafe_allow_html=True)
 
     st.markdown(f'<p class="source-note">📅 Données collectées le {datetime.now().strftime("%d/%m/%Y à %H:%M")} — Toutes les valeurs proviennent de sources officielles vérifiables.</p>', unsafe_allow_html=True)
