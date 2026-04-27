@@ -728,6 +728,221 @@ def build_article_iv_prompt(country_name, mentions_df, numeric_df, table_scores_
 
     return "\n".join(lines)
 
+
+# ─────────────────────────────────────────────
+# Piliers consolidés — socio-politique et croissance
+# ─────────────────────────────────────────────
+
+def fetch_wb_history_values(country_code, indicator_code, n_years=25):
+    """
+    Récupère une série historique Banque mondiale et renvoie les observations non nulles,
+    triées par année croissante. Sert aux moyennes de croissance et tendances longues.
+    """
+    url = f"https://api.worldbank.org/v2/country/{country_code}/indicator/{indicator_code}?format=json&per_page=200"
+    try:
+        r = requests.get(url, timeout=25, headers={"User-Agent": "Mozilla/5.0"})
+        r.raise_for_status()
+        data = r.json()
+        if not isinstance(data, list) or len(data) < 2 or not data[1]:
+            return []
+        rows = []
+        for obs in data[1]:
+            if obs.get("value") is not None:
+                try:
+                    rows.append({"year": int(obs["date"]), "value": float(obs["value"])})
+                except Exception:
+                    continue
+        rows.sort(key=lambda x: x["year"])
+        return rows[-n_years:]
+    except Exception:
+        return []
+
+
+def latest_from_history(history):
+    if not history:
+        return None, None
+    last = history[-1]
+    return last.get("value"), last.get("year")
+
+
+def average_since(history, start_year=2010):
+    vals = [x["value"] for x in history if x.get("year") is not None and x["year"] >= start_year]
+    if not vals:
+        return None
+    return sum(vals) / len(vals)
+
+
+def average_last_n(history, n=10):
+    vals = [x["value"] for x in history[-n:]]
+    if not vals:
+        return None
+    return sum(vals) / len(vals)
+
+
+def add_wb_indicator(rows, label, value, year, unit, wb_indicator_code, note=None):
+    url = f"https://data.worldbank.org/indicator/{wb_indicator_code}" if wb_indicator_code else None
+    v = "N/D" if value is None else (f"{value:,.1f}" if isinstance(value, (int, float)) else value)
+    rows.append(ind(label, v, unit, year, "Banque mondiale", url, note))
+
+
+def build_sociopo_section(section_header, section_governance, section_labour, section_poverty, section_education):
+    """
+    Rassemble les données sociopolitiques dans un seul bloc lisible.
+    """
+    rows = []
+    rows.extend(section_header)
+    rows.extend(section_governance)
+    rows.extend(section_labour)
+    rows.extend(section_poverty)
+    rows.extend(section_education)
+    return rows
+
+
+def build_growth_section(wb_code):
+    """
+    Bloc 'Modèle économique et régime de croissance'.
+    Les données quantitatives viennent prioritairement de la Banque mondiale.
+    Les informations non standardisées sont signalées comme à chercher dans l'Article IV.
+    """
+    rows = []
+
+    # Séries principales
+    indicators = {
+        "NY.GDP.MKTP.CD": ("PIB nominal total", "USD courants"),
+        "NY.GDP.PCAP.CD": ("PIB par habitant", "USD courants"),
+        "NY.GDP.MKTP.KD.ZG": ("Croissance du PIB réel — dernière observation", "%"),
+        "FP.CPI.TOTL.ZG": ("Inflation annuelle", "%"),
+        "NV.AGR.TOTL.ZS": ("Agriculture — part du PIB", "% du PIB"),
+        "NV.IND.TOTL.ZS": ("Industrie — part du PIB", "% du PIB"),
+        "NV.IND.MANF.ZS": ("Manufacturier — part du PIB", "% du PIB"),
+        "NV.SRV.TOTL.ZS": ("Services — part du PIB", "% du PIB"),
+        "SL.AGR.EMPL.ZS": ("Emploi agricole", "% de l'emploi total"),
+        "SL.IND.EMPL.ZS": ("Emploi industriel", "% de l'emploi total"),
+        "SL.SRV.EMPL.ZS": ("Emploi dans les services", "% de l'emploi total"),
+        "NE.CON.PRVT.ZS": ("Consommation privée", "% du PIB"),
+        "NE.CON.GOVT.ZS": ("Consommation publique", "% du PIB"),
+        "NE.GDI.FTOT.ZS": ("Formation brute de capital fixe", "% du PIB"),
+        "NE.GDI.FPRV.ZS": ("Investissement privé", "% du PIB"),
+        "BX.KLT.DINV.WD.GD.ZS": ("IDE entrants nets", "% du PIB"),
+        "BX.TRF.PWKR.DT.GD.ZS": ("Transferts de migrants", "% du PIB"),
+        "FS.AST.PRVT.GD.ZS": ("Crédit domestique au secteur privé", "% du PIB"),
+        "NE.EXP.GNFS.ZS": ("Exportations de biens et services", "% du PIB"),
+        "NE.IMP.GNFS.ZS": ("Importations de biens et services", "% du PIB"),
+        "BN.CAB.XOKA.GD.ZS": ("Solde courant", "% du PIB"),
+    }
+
+    histories = {}
+    for code, (label, unit) in indicators.items():
+        hist = fetch_wb_history_values(wb_code, code, n_years=25)
+        histories[code] = hist
+        val, year = latest_from_history(hist)
+        add_wb_indicator(rows, label, val, year, unit, code)
+
+    # Moyennes de croissance
+    growth_hist = histories.get("NY.GDP.MKTP.KD.ZG", [])
+    avg_2010 = average_since(growth_hist, 2010)
+    avg_10y = average_last_n(growth_hist, 10)
+
+    rows.append(ind(
+        "Croissance moyenne du PIB réel depuis 2010",
+        f"{avg_2010:.1f}" if avg_2010 is not None else "N/D",
+        "%",
+        f"{min([x['year'] for x in growth_hist if x['year'] >= 2010], default='—')}-{max([x['year'] for x in growth_hist], default='—')}" if avg_2010 is not None else None,
+        "Calcul interne à partir de Banque mondiale",
+        "https://data.worldbank.org/indicator/NY.GDP.MKTP.KD.ZG",
+        None if avg_2010 is not None else "Série insuffisante pour calculer la moyenne"
+    ))
+
+    rows.append(ind(
+        "Croissance moyenne du PIB réel — 10 dernières observations",
+        f"{avg_10y:.1f}" if avg_10y is not None else "N/D",
+        "%",
+        f"{growth_hist[-10]['year']}-{growth_hist[-1]['year']}" if len(growth_hist) >= 10 else None,
+        "Calcul interne à partir de Banque mondiale",
+        "https://data.worldbank.org/indicator/NY.GDP.MKTP.KD.ZG",
+        None if avg_10y is not None else "Série insuffisante pour calculer la moyenne"
+    ))
+
+    # Indicateurs non standardisés : guider l'IA vers Article IV / sources sectorielles
+    qualitative_guides = [
+        ("Part du secteur extractif dans le PIB", "À rechercher dans l'Article IV FMI, les comptes nationaux détaillés ou les autorités statistiques."),
+        ("Part du secteur extractif dans les exportations", "À rechercher dans l'Article IV FMI, UN Comtrade/OEC ou les autorités douanières."),
+        ("Part du secteur extractif dans les recettes publiques", "À rechercher dans l'Article IV FMI, DSA FMI, EITI ou budget national."),
+        ("Part du tourisme dans le PIB", "À rechercher dans l'Article IV FMI, WTTC, UN Tourism ou autorités nationales."),
+        ("Part de la construction, immobilier ou finance dans le PIB", "À rechercher dans les comptes nationaux détaillés ou l'Article IV."),
+        ("Décomposition sectorielle fine de la croissance", "À rechercher dans l'Article IV FMI, rapport banque centrale ou comptes nationaux."),
+        ("Contribution consommation/investissement/exportations à la croissance", "À rechercher dans l'Article IV FMI ou les tableaux de comptes nationaux."),
+        ("Croissance potentielle FMI", "À rechercher dans l'Article IV FMI, généralement dans le texte ou les annexes."),
+        ("Prévisions FMI année en cours et année suivante", "À rechercher dans l'Article IV FMI, WEO ou World Bank MPO."),
+        ("Révisions des prévisions FMI/Banque mondiale", "À rechercher dans WEO/MPO et dans les communiqués récents."),
+        ("Réserves, durée de vie des ressources, fonds souverain", "À rechercher dans l'Article IV FMI, rapports sectoriels ou fonds souverain national."),
+        ("Réformes économiques récentes et chocs récents", "À rechercher dans l'Article IV FMI et les rapports Banque mondiale/MPO."),
+    ]
+
+    for label, note in qualitative_guides:
+        rows.append(ind(label, "À rechercher", None, None, "Article IV FMI / source sectorielle", "", note))
+
+    return rows
+
+
+def build_model_growth_prompt(country_name, growth_rows, article_iv_prompt_text=None):
+    """
+    Prompt spécifique pour produire le paragraphe 'Modèle économique et régime de croissance'.
+    """
+    lines = [
+        f"PAYS : {country_name}",
+        "",
+        "DONNÉES QUANTITATIVES DISPONIBLES — BLOC MODÈLE ÉCONOMIQUE ET RÉGIME DE CROISSANCE",
+        "=" * 80,
+    ]
+
+    for r in growth_rows:
+        label = r.get("Indicateur", "")
+        val = r.get("Valeur", "N/D")
+        unit = r.get("Unité", "")
+        year = r.get("Année", "—")
+        source = r.get("Source", "")
+        note = r.get("Note", "")
+        unit_str = f" {unit}" if unit else ""
+        year_str = f" ({year})" if year and year != "—" else ""
+        note_str = f" — Note : {note}" if note else ""
+        lines.append(f"- {label} : {val}{unit_str}{year_str} — Source : {source}{note_str}")
+
+    if article_iv_prompt_text:
+        lines += [
+            "",
+            "=" * 80,
+            "ÉLÉMENTS EXTRAITS DE L'ARTICLE IV FMI",
+            "=" * 80,
+            article_iv_prompt_text[:18000],
+        ]
+
+    lines += [
+        "",
+        "=" * 80,
+        "CONSIGNE DE RÉDACTION",
+        "=" * 80,
+        "À partir des données fournies, rédige un paragraphe intitulé « Modèle économique et régime de croissance », en respectant strictement le style, la structure et le niveau d’analyse des exemples fournis.",
+        "",
+        "Le texte doit être divisé en deux sous-parties explicites : « Modèle économique : » puis « Régime de croissance : ». Il doit être rédigé en paragraphes denses, sans bullet points, dans un style analytique, synthétique et institutionnel. Le ton doit être celui d’une fiche pays professionnelle : précis, nuancé, factuel, mais interprétatif. Ne fais pas de généralités vagues. Chaque affirmation analytique doit être rattachée à un chiffre, une tendance ou un mécanisme économique.",
+        "",
+        "Partie 1 — Modèle économique : commence par caractériser la structure productive du pays. Indique si l’économie est diversifiée ou non, industrialisée ou non, agricole, extractive, manufacturière, tertiarisée, rentière, ouverte, dépendante des importations ou tirée par la demande interne. Présente ensuite les principaux secteurs dans l’ordre de leur importance économique ou stratégique. Pour chaque secteur important, indique si possible sa part dans le PIB, sa part dans l’emploi, sa contribution aux exportations ou son rôle dans l’investissement. Ne te contente pas de lister les secteurs : explique ce que cette structure révèle du modèle économique.",
+        "",
+        "Identifie les forces structurelles du pays si elles sont directement appuyées par les données ou par l’Article IV : ressources naturelles, base industrielle, position exportatrice, capital humain, marché intérieur, intégration régionale, avantage comparatif, fonds souverain, tourisme, diaspora, agriculture productive. Identifie aussi les fragilités structurelles : faible diversification, dépendance à une rente, faiblesse du secteur privé formel, faible productivité, informalité, enclavement, déficit d’infrastructures, insuffisance du capital humain, exposition climatique, environnement des affaires dégradé, dépendance aux importations, faible transformation locale, surcapacités, désindustrialisation, crise immobilière, capture de rente, dépendance à un partenaire commercial dominant.",
+        "",
+        "Si une transformation structurelle est en cours, décris-la clairement : industrialisation, tertiarisation, re-primarisation, montée en gamme, libéralisation, intervention accrue de l’État, diversification, intégration aux chaînes de valeur, transition verte, développement extractif. Précise si cette transformation paraît solide, incomplète, contrainte ou risquée. Termine cette partie par une appréciation synthétique du modèle : ce qu’il permet, ce qu’il bloque, et le principal risque structurel qui en découle.",
+        "",
+        "Partie 2 — Régime de croissance : commence par qualifier le rythme de croissance sur longue période : dynamique, faible, volatile, résilient, ralenti, artificiellement soutenu, cyclique, dépendant des matières premières. Donne si possible la croissance moyenne sur 10 ans ou depuis 2010. Explique ensuite les moteurs de la croissance : consommation privée, investissement public, investissement privé, exportations, dépenses publiques, crédit, rente extractive, tourisme, agriculture, immobilier, transferts de migrants, aide extérieure, IDE, grands projets d’infrastructures, politique industrielle.",
+        "",
+        "Distingue clairement la tendance longue des évolutions récentes. Mentionne les chocs récents pertinents lorsque les données ou l’Article IV les documentent : Covid, guerre, coup d’État, crise immobilière, choc climatique, choc énergétique, sanctions, tensions commerciales, changement de gouvernement, réformes, ajustement budgétaire, baisse de l’aide, adhésion à une organisation régionale. Analyse la soutenabilité de la croissance : croissance forte mais peu inclusive, tirée par les dépenses publiques, dépendante du crédit, portée par un effet de base, vulnérable aux prix mondiaux, sans gains de productivité, ou faible malgré des atouts structurels.",
+        "",
+        "Termine par les perspectives et risques à moyen terme : demande externe, prix des matières premières, épuisement d’une rente, immobilier, endettement, instabilité politique, climat, conflit, fragmentation commerciale, baisse de l’aide, faiblesse du secteur privé, démographie, tensions sociales, insécurité, dépendance énergétique.",
+        "",
+        "Contraintes : ne pas inventer de chiffres. Si une donnée manque, ne pas la remplacer par une supposition. Tu peux formuler une inférence prudente, mais elle doit être explicitement fondée sur les données disponibles. Si une information ne peut être trouvée que dans l’Article IV et qu’aucun PDF n’a été fourni, signale qu’elle doit être vérifiée dans l’Article IV plutôt que de l’inventer.",
+    ]
+
+    return "\n".join(lines)
+
 # ─────────────────────────────────────────────
 # Construction du prompt IA
 # ─────────────────────────────────────────────
@@ -920,6 +1135,19 @@ if st.button("Récupérer les données →"):
     section_climate.append(ind("ND-Gain Index", "N/D", None, None, "Notre Dame Global Adaptation Initiative", "https://gain.nd.edu/our-work/country-index/", "Téléchargement manuel requis — gain.nd.edu"))
     section_climate.append(ind("Biodiversity Intactness Index", "N/D", None, None, "UK Natural History Museum", "https://www.nhm.ac.uk/our-science/data/biodiversity-indicators/", "Téléchargement manuel requis — nhm.ac.uk"))
 
+    # ── Pilier 1 : Environnement politique et socioéconomique consolidé ──
+    pillar_sociopo = build_sociopo_section(
+        section_header,
+        section_governance,
+        section_labour,
+        section_poverty,
+        section_education
+    )
+
+    # ── Pilier 2 : Modèle économique et régime de croissance ──
+    with st.spinner("Construction du bloc Modèle économique et régime de croissance..."):
+        pillar_growth = build_growth_section(wb_code)
+
     # ══════════════════════════════════════
     # Affichage
     # ══════════════════════════════════════
@@ -936,25 +1164,34 @@ if st.button("Récupérer les données →"):
         if source_url:
             st.markdown(f'<p class="source-note">🔗 <a href="{source_url}" target="_blank">{source_label or source_url}</a></p>', unsafe_allow_html=True)
 
-    show_section("📋 En-tête",
-        "Gouvernance politique, positionnement économique, IDH — Sources : Freedom House · PNUD · Banque Mondiale",
-        section_header, "https://freedomhouse.org", "Freedom House · PNUD · Banque Mondiale")
+    show_section("📌 Pilier 1 — Environnement politique et socioéconomique",
+        "Bloc consolidé : Freedom House, IDH, statut de revenu, Gini, pauvreté, emploi, éducation et gouvernance WGI",
+        pillar_sociopo, "https://data.worldbank.org", "Freedom House · PNUD · Banque mondiale · WGI")
 
-    show_section("🏛️ Gouvernance (WGI)",
-        "6 indicateurs de gouvernance mondiale — échelle de −2,5 (mauvais) à +2,5 (bon)",
-        section_governance, "https://info.worldbank.org/governance/wgi/", "Banque Mondiale — Worldwide Governance Indicators")
+    with st.expander("Voir le détail des sous-sections socio-politiques"):
+        show_section("📋 En-tête",
+            "Gouvernance politique, positionnement économique, IDH — Sources : Freedom House · PNUD · Banque Mondiale",
+            section_header, "https://freedomhouse.org", "Freedom House · PNUD · Banque Mondiale")
 
-    show_section("💼 Marché du travail",
-        "Taux d'emploi, chômage jeunes, emploi féminin, informalité — Source : Banque Mondiale / OIT",
-        section_labour, wb_url_base, "Banque Mondiale")
+        show_section("🏛️ Gouvernance (WGI)",
+            "6 indicateurs de gouvernance mondiale — échelle de −2,5 (mauvais) à +2,5 (bon)",
+            section_governance, "https://info.worldbank.org/governance/wgi/", "Banque Mondiale — Worldwide Governance Indicators")
 
-    show_section("📊 Pauvreté et inégalités",
-        "Seuil de pauvreté extrême et distribution des revenus — Source : Banque Mondiale",
-        section_poverty, wb_url_base, "Banque Mondiale")
+        show_section("💼 Marché du travail",
+            "Taux d'emploi, chômage jeunes, emploi féminin, informalité — Source : Banque Mondiale / OIT",
+            section_labour, wb_url_base, "Banque Mondiale")
 
-    show_section("🎓 Éducation",
-        "Taux de scolarisation bruts par niveau — Source : Banque Mondiale / UNESCO",
-        section_education, wb_url_base, "Banque Mondiale / UNESCO")
+        show_section("📊 Pauvreté et inégalités",
+            "Seuil de pauvreté extrême et distribution des revenus — Source : Banque Mondiale",
+            section_poverty, wb_url_base, "Banque Mondiale")
+
+        show_section("🎓 Éducation",
+            "Taux de scolarisation bruts par niveau — Source : Banque Mondiale / UNESCO",
+            section_education, wb_url_base, "Banque Mondiale / UNESCO")
+
+    show_section("📈 Pilier 2 — Modèle économique et régime de croissance",
+        "Structure productive, emploi sectoriel, demande, financement, ouverture externe et croissance — Sources : Banque mondiale ; compléments à chercher dans l’Article IV",
+        pillar_growth, "https://data.worldbank.org", "Banque mondiale · Article IV FMI pour les informations non standardisées")
 
     show_section("🌿 Climat et environnement",
         "Émissions CO₂, forêts, mix énergétique — Source : Banque Mondiale · FAO · AIE · ND-Gain · NHM",
@@ -1062,11 +1299,8 @@ if st.button("Récupérer les données →"):
     st.markdown('<div class="section-subtitle">Collez ce texte dans Claude, ChatGPT ou tout autre outil IA pour obtenir une analyse structurée en 3 blocs.</div>', unsafe_allow_html=True)
 
     all_sections_prompt = {
-        "En-tête": section_header,
-        "Gouvernance WGI": section_governance,
-        "Marché du travail": section_labour,
-        "Pauvreté et inégalités": section_poverty,
-        "Éducation": section_education,
+        "Pilier 1 — Environnement politique et socioéconomique": pillar_sociopo,
+        "Pilier 2 — Modèle économique et régime de croissance": pillar_growth,
         "Climat et environnement": section_climate,
     }
 
@@ -1086,5 +1320,19 @@ if st.button("Récupérer les données →"):
 
     st.text_area("Prompt généré", value=prompt_text, height=420,
                  help="Sélectionnez tout (Ctrl+A) puis copiez (Ctrl+C)")
+
+    growth_prompt_text = build_model_growth_prompt(
+        selected_name,
+        pillar_growth,
+        article_iv_prompt_text
+    )
+
+    st.markdown("### Prompt spécialisé — Modèle économique et régime de croissance")
+    st.text_area(
+        "Prompt croissance généré",
+        value=growth_prompt_text,
+        height=520,
+        help="Prompt dédié pour rédiger précisément la section « Modèle économique et régime de croissance »."
+    )
 
     st.markdown(f'<p class="source-note">📅 Données collectées le {datetime.now().strftime("%d/%m/%Y à %H:%M")} — Toutes les valeurs proviennent de sources officielles vérifiables.</p>', unsafe_allow_html=True)
