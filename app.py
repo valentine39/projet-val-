@@ -407,6 +407,31 @@ def ind(label, value, unit, year, source, url=None, note=None):
 
 
 
+def make_unique_columns(df):
+    """
+    Streamlit / PyArrow refuse les DataFrames avec noms de colonnes dupliqués.
+    Les tableaux PDF FMI ont souvent des colonnes vides ou répétées : on les renomme proprement.
+    """
+    df = df.copy()
+    seen = {}
+    new_cols = []
+
+    for col in df.columns:
+        col = str(col).strip() if col is not None else "colonne"
+        if col == "" or col.lower() == "none":
+            col = "colonne"
+
+        if col in seen:
+            seen[col] += 1
+            new_cols.append(f"{col}_{seen[col]}")
+        else:
+            seen[col] = 0
+            new_cols.append(col)
+
+    df.columns = new_cols
+    return df
+
+
 # ─────────────────────────────────────────────
 # Article IV FMI — extraction depuis PDF uploadé
 # ─────────────────────────────────────────────
@@ -521,6 +546,8 @@ def extract_article_iv_tables(uploaded_pdf, max_tables=30):
                         df = pd.DataFrame(body, columns=header)
                     except Exception:
                         df = pd.DataFrame(cleaned)
+
+                    df = make_unique_columns(df)
 
                     tables_out.append({
                         "page": page_number,
@@ -1004,7 +1031,7 @@ if st.button("Récupérer les données →"):
                 else:
                     for item in tables[:15]:
                         st.markdown(f"**Page {item['page']} — Tableau {item['table_id']}**")
-                        st.dataframe(item["data"], use_container_width=True)
+                        st.dataframe(make_unique_columns(item["data"]), use_container_width=True)
 
             with st.expander("Voir le texte extrait du PDF"):
                 full_text = "\n\n".join(
@@ -1059,7 +1086,5 @@ if st.button("Récupérer les données →"):
 
     st.text_area("Prompt généré", value=prompt_text, height=420,
                  help="Sélectionnez tout (Ctrl+A) puis copiez (Ctrl+C)")
-
-    st.markdown(f'<p class="source-note">📅 Données collectées le {datetime.now().strftime("%d/%m/%Y à %H:%M")} — Toutes les valeurs proviennent de sources officielles vérifiables.</p>', unsafe_allow_html=True)
 
     st.markdown(f'<p class="source-note">📅 Données collectées le {datetime.now().strftime("%d/%m/%Y à %H:%M")} — Toutes les valeurs proviennent de sources officielles vérifiables.</p>', unsafe_allow_html=True)
