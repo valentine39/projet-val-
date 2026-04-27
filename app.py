@@ -992,4 +992,4 @@ if st.button("Récupérer les données →"):
     st.text_area("Prompt généré", value=prompt_text, height=420,
                  help="Sélectionnez tout (Ctrl+A) puis copiez (Ctrl+C)")
 
-    st.markdown(f'<p class="source-note">📅 Données collectées le {datetime.now().strftime("%d/%m/%Y à %H:%M")} — Toutes les valeurs proviennent de sources officielles vérifiables.</p>', un
+    st.markdown(f'<p class="source-note">📅 Données collectées le {datetime.now().strftime("%d/%m/%Y à %H:%M")} — Toutes les valeurs proviennent de sources officielles vérifiables.</p>', unsafe_allow_html=True)
