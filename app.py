@@ -800,6 +800,59 @@ if st.button("Récupérer les données →"):
 
             st.markdown("---")
 
+
+    # ══════════════════════════════════════
+    # Debug IMF Data API officielle — temporaire
+    # ══════════════════════════════════════
+    st.markdown("---")
+    st.markdown('<div class="section-title">🔎 Debug IMF Data API officielle — temporaire</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-subtitle">Ce bloc teste l’accès à api.imf.org, l’API officielle SDMX du FMI. '
+        'Il sert à vérifier si cette voie est utilisable depuis l’environnement Streamlit.</div>',
+        unsafe_allow_html=True
+    )
+
+    with st.expander("Afficher le diagnostic technique IMF Data API officielle"):
+        test_urls = [
+            "https://api.imf.org/external/sdmx/2.1/dataflow/IMF",
+            "https://api.imf.org/external/sdmx/3.0/structure/dataflow/IMF",
+        ]
+
+        for test_url in test_urls:
+            st.write("URL testée :", test_url)
+
+            try:
+                r = requests.get(
+                    test_url,
+                    timeout=30,
+                    headers={
+                        "User-Agent": "Mozilla/5.0",
+                        "Accept": "application/json"
+                    }
+                )
+
+                st.write("Status :", r.status_code)
+                st.write("Content-Type :", r.headers.get("Content-Type"))
+
+                try:
+                    data = r.json()
+                    if isinstance(data, dict):
+                        st.write("Clés principales :", list(data.keys()))
+                    else:
+                        st.write("Type de réponse :", type(data))
+
+                    with st.expander(f"JSON brut — {test_url}", expanded=False):
+                        st.json(data)
+
+                except Exception as e:
+                    st.write("Pas de JSON lisible :", e)
+                    st.text(r.text[:3000])
+
+            except Exception as e:
+                st.write("Erreur requête :", e)
+
+            st.markdown("---")
+
     # ══════════════════════════════════════
     # Prompt IA
     # ══════════════════════════════════════
