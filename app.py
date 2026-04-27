@@ -563,6 +563,39 @@ st.write("")
 
 if st.button("Récupérer les données →"):
 
+   # ─────────────────────────────────────────────
+# DEBUG FMI (TEMPORAIRE)
+# ─────────────────────────────────────────────
+with st.expander("🔎 Debug FMI"):
+    test_url = f"https://www.imf.org/external/datamapper/api/v2/NGDP_RPCH/{wb_code}"
+
+    st.write("URL testée :", test_url)
+
+    try:
+        r = requests.get(
+            test_url,
+            timeout=30,
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+
+        st.write("Status :", r.status_code)
+        st.write("Content-Type :", r.headers.get("Content-Type"))
+
+        try:
+            data = r.json()
+
+            st.write("Clés principales :", list(data.keys()))
+
+            # affiche seulement un extrait pour ne pas saturer
+            st.json(data)
+
+        except Exception as e:
+            st.write("Erreur parsing JSON :", e)
+            st.text(r.text[:1000])
+
+    except Exception as e:
+        st.write("Erreur requête :", e)
+    
     with st.spinner("Collecte en cours — Freedom House, Banque Mondiale, PNUD..."):
 
         fh = fetch_freedom_house(country_info["freedom_house_slug"])
