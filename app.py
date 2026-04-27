@@ -411,80 +411,126 @@ def ind(label, value, unit, year, source, url=None, note=None):
 # ─────────────────────────────────────────────
 
 IMF_DATAMAPPER_INDICATORS = {
-    "NGDP_RPCH": {
-        "label": "Croissance du PIB réel",
-        "unit": "%",
-        "url_path": "NGDP_RPCH",
-    },
-    "PCPIPCH": {
-        "label": "Inflation moyenne",
-        "unit": "%",
-        "url_path": "PCPIPCH",
-    },
-    "GGXWDG_NGDP": {
-        "label": "Dette publique / PIB",
-        "unit": "% du PIB",
-        "url_path": "GGXWDG_NGDP",
-    },
-    "GGXCNL_NGDP": {
-        "label": "Solde budgétaire / PIB",
-        "unit": "% du PIB",
-        "url_path": "GGXCNL_NGDP",
-    },
-    "BCA_NGDPD": {
-        "label": "Solde courant / PIB",
-        "unit": "% du PIB",
-        "url_path": "BCA_NGDPD",
-    },
+    "NGDP_RPCH": {"label": "Croissance du PIB réel", "unit": "%"},
+    "PCPIPCH": {"label": "Inflation moyenne", "unit": "%"},
+    "GGXWDG_NGDP": {"label": "Dette publique / PIB", "unit": "% du PIB"},
+    "GGXCNL_NGDP": {"label": "Solde budgétaire / PIB", "unit": "% du PIB"},
+    "BCA_NGDPD": {"label": "Solde courant / PIB", "unit": "% du PIB"},
 }
+
+# Le DataMapper accepte généralement les codes ISO3 (FRA, TLS, KEN...),
+# mais certains pays peuvent avoir des codes internes différents.
+# On garde donc une table d'alias, utilisée seulement si le code ISO3 ne répond pas.
+IMF_COUNTRY_ALIASES = {
+    "XKX": ["UVK"],   # Kosovo, selon les jeux de données
+    "TLS": ["TLS"],
+    "ZAF": ["ZAF"],
+    "COD": ["COD"],
+    "COG": ["COG"],
+}
+
+
+def _extract_numeric_timeseries_from_imf_json(data, indicator_code, country_code):
+    """
+    Extrait une série annuelle depuis une réponse DataMapper, avec parsing robuste.
+    Selon la version API, la structure peut varier légèrement.
+    On cherche d'abord values[indicator][country], puis on fait un fallback récursif.
+    """
+
+    def clean_series(obj):
+        if not isinstance(obj, dict):
+            return {}
+        out = {}
+        for year, value in obj.items():
+            try:
+                y = int(year)
+                v = float(value)
+                out[y] = v
+            except Exception:
+                continue
+        return out
+
+    values = data.get("values", {}) if isinstance(data, dict) else {}
+
+    # Cas attendu : values[indicator][country] = {year: value}
+    try:
+        direct = values.get(indicator_code, {}).get(country_code, {})
+        series = clean_series(direct)
+        if series:
+            return series
+    except Exception:
+        pass
+
+    # Cas proche : values[indicator] contient un seul pays ou un alias pays
+    try:
+        ind_block = values.get(indicator_code, {})
+        if isinstance(ind_block, dict):
+            for k, v in ind_block.items():
+                if str(k).upper() == str(country_code).upper():
+                    series = clean_series(v)
+                    if series:
+                        return series
+            # Fallback : première série annuelle trouvée sous l'indicateur
+            for v in ind_block.values():
+                series = clean_series(v)
+                if series:
+                    return series
+    except Exception:
+        pass
+
+    # Fallback récursif : trouver n'importe quel dict {année: valeur}
+    def walk(obj):
+        if isinstance(obj, dict):
+            series = clean_series(obj)
+            if len(series) >= 2:
+                return series
+            for v in obj.values():
+                found = walk(v)
+                if found:
+                    return found
+        elif isinstance(obj, list):
+            for v in obj:
+                found = walk(v)
+                if found:
+                    return found
+        return {}
+
+    return walk(data)
 
 
 def fetch_imf_datamapper_latest(country_code, indicator_code):
     """
     Récupère la dernière valeur disponible d'un indicateur FMI DataMapper.
-    Les codes pays IMF DataMapper correspondent souvent aux codes ISO3, ce qui marche pour beaucoup de pays,
-    mais certains cas particuliers peuvent renvoyer N/D.
+    Essaie l'API v1 puis v2, et accepte plusieurs alias pays si nécessaire.
     """
-    url = f"https://www.imf.org/external/datamapper/api/v2/{indicator_code}/{country_code}"
+    country_code = str(country_code).upper().strip()
+    country_candidates = [country_code] + [c for c in IMF_COUNTRY_ALIASES.get(country_code, []) if c != country_code]
+    api_versions = ["v1", "v2"]
 
-    try:
-        r = requests.get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
-        r.raise_for_status()
-        data = r.json()
-
-        values = (
-            data.get("values", {})
-            .get(indicator_code, {})
-            .get(country_code, {})
-        )
-
-        if not values:
-            return None, None
-
-        cleaned = {}
-        for year, value in values.items():
+    for version in api_versions:
+        for candidate in country_candidates:
+            url = f"https://www.imf.org/external/datamapper/api/{version}/{indicator_code}/{candidate}"
             try:
-                cleaned[int(year)] = float(value)
+                r = requests.get(url, timeout=25, headers={"User-Agent": "Mozilla/5.0"})
+                r.raise_for_status()
+                data = r.json()
+
+                series = _extract_numeric_timeseries_from_imf_json(data, indicator_code, candidate)
+                if series:
+                    latest_year = max(series.keys())
+                    return series[latest_year], latest_year, url
+
             except Exception:
                 continue
 
-        if not cleaned:
-            return None, None
-
-        latest_year = max(cleaned.keys())
-        return cleaned[latest_year], latest_year
-
-    except Exception:
-        return None, None
+    return None, None, "https://www.imf.org/external/datamapper/"
 
 
 def build_imf_macro_section(country_code):
     rows = []
 
     for indicator_code, meta in IMF_DATAMAPPER_INDICATORS.items():
-        value, year = fetch_imf_datamapper_latest(country_code, indicator_code)
-
-        source_url = f"https://www.imf.org/external/datamapper/{indicator_code}@WEO/{country_code}"
+        value, year, source_url = fetch_imf_datamapper_latest(country_code, indicator_code)
 
         if value is None:
             rows.append(ind(
@@ -763,4 +809,5 @@ if st.button("Récupérer les données →"):
                  help="Sélectionnez tout (Ctrl+A) puis copiez (Ctrl+C)")
 
     st.markdown(f'<p class="source-note">📅 Données collectées le {datetime.now().strftime("%d/%m/%Y à %H:%M")} — Toutes les valeurs proviennent de sources officielles vérifiables.</p>', unsafe_allow_html=True)
+
 
