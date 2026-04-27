@@ -563,39 +563,6 @@ st.write("")
 
 if st.button("Récupérer les données →"):
 
-   # ─────────────────────────────────────────────
-# DEBUG FMI (TEMPORAIRE)
-# ─────────────────────────────────────────────
-with st.expander("🔎 Debug FMI"):
-    test_url = f"https://www.imf.org/external/datamapper/api/v2/NGDP_RPCH/{wb_code}"
-
-    st.write("URL testée :", test_url)
-
-    try:
-        r = requests.get(
-            test_url,
-            timeout=30,
-            headers={"User-Agent": "Mozilla/5.0"}
-        )
-
-        st.write("Status :", r.status_code)
-        st.write("Content-Type :", r.headers.get("Content-Type"))
-
-        try:
-            data = r.json()
-
-            st.write("Clés principales :", list(data.keys()))
-
-            # affiche seulement un extrait pour ne pas saturer
-            st.json(data)
-
-        except Exception as e:
-            st.write("Erreur parsing JSON :", e)
-            st.text(r.text[:1000])
-
-    except Exception as e:
-        st.write("Erreur requête :", e)
-    
     with st.spinner("Collecte en cours — Freedom House, Banque Mondiale, PNUD..."):
 
         fh = fetch_freedom_house(country_info["freedom_house_slug"])
@@ -761,6 +728,78 @@ with st.expander("🔎 Debug FMI"):
         "Émissions CO₂, forêts, mix énergétique — Source : Banque Mondiale · FAO · AIE · ND-Gain · NHM",
         section_climate, wb_url_base, "Banque Mondiale · FAO · AIE")
 
+
+    # ══════════════════════════════════════
+    # Debug FMI — temporaire
+    # ══════════════════════════════════════
+    st.markdown("---")
+    st.markdown('<div class="section-title">🔎 Debug FMI — temporaire</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-subtitle">Ce bloc sert à comprendre pourquoi FMI DataMapper renvoie N/D. '
+        'Tu peux le supprimer une fois le problème identifié.</div>',
+        unsafe_allow_html=True
+    )
+
+    with st.expander("Afficher le diagnostic technique FMI"):
+        test_indicator = "NGDP_RPCH"
+        test_urls = [
+            f"https://www.imf.org/external/datamapper/api/v2/{test_indicator}/{wb_code}",
+            f"https://www.imf.org/external/datamapper/api/v1/{test_indicator}/{wb_code}",
+            f"https://www.imf.org/external/datamapper/api/v2/{test_indicator}",
+            f"https://www.imf.org/external/datamapper/api/v1/{test_indicator}",
+        ]
+
+        for test_url in test_urls:
+            st.write("URL testée :", test_url)
+            try:
+                r = requests.get(
+                    test_url,
+                    timeout=30,
+                    headers={"User-Agent": "Mozilla/5.0"}
+                )
+
+                st.write("Status :", r.status_code)
+                st.write("Content-Type :", r.headers.get("Content-Type"))
+
+                try:
+                    data = r.json()
+                    st.write("Clés principales :", list(data.keys()))
+
+                    values = data.get("values", {})
+                    if isinstance(values, dict):
+                        st.write("Clés dans values :", list(values.keys())[:10])
+
+                        indicator_values = values.get(test_indicator, {})
+                        if isinstance(indicator_values, dict):
+                            st.write(
+                                f"Premières clés pays pour {test_indicator} :",
+                                list(indicator_values.keys())[:30]
+                            )
+
+                            if wb_code in indicator_values:
+                                st.write(f"✅ Le code pays {wb_code} existe dans la réponse FMI.")
+                                st.json(indicator_values[wb_code])
+                            else:
+                                st.write(f"⚠️ Le code pays {wb_code} n'apparaît pas tel quel dans la réponse.")
+                                matching = [
+                                    k for k in indicator_values.keys()
+                                    if wb_code.upper() in str(k).upper()
+                                    or country_info["name"].upper().replace(" ", "") in str(k).upper().replace(" ", "")
+                                ]
+                                st.write("Clés proches trouvées :", matching[:20])
+
+                    with st.expander(f"JSON brut — {test_url}", expanded=False):
+                        st.json(data)
+
+                except Exception as e:
+                    st.write("Erreur parsing JSON :", e)
+                    st.text(r.text[:2000])
+
+            except Exception as e:
+                st.write("Erreur requête :", e)
+
+            st.markdown("---")
+
     # ══════════════════════════════════════
     # Prompt IA
     # ══════════════════════════════════════
@@ -783,4 +822,3 @@ with st.expander("🔎 Debug FMI"):
                  help="Sélectionnez tout (Ctrl+A) puis copiez (Ctrl+C)")
 
     st.markdown(f'<p class="source-note">📅 Données collectées le {datetime.now().strftime("%d/%m/%Y à %H:%M")} — Toutes les valeurs proviennent de sources officielles vérifiables.</p>', unsafe_allow_html=True)
-
