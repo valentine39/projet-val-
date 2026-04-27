@@ -879,24 +879,31 @@ if st.button("Récupérer les données →"):
             st.markdown("---")
 
 
+
     # ══════════════════════════════════════
     # Recherche WEO dans le catalogue FMI — temporaire
     # ══════════════════════════════════════
     st.markdown("---")
     st.markdown('<div class="section-title">🔎 Recherche WEO dans le catalogue FMI</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="section-subtitle">Ce bloc interroge le catalogue SDMX Central du FMI et cherche les dataflows liés au WEO.</div>',
+        '<div class="section-subtitle">Ce bloc interroge le catalogue SDMX Central du FMI et cherche les dataflows liés au WEO. '
+        'Il accepte les réponses XML ou JSON.</div>',
         unsafe_allow_html=True
     )
 
     with st.expander("Afficher les dataflows FMI contenant WEO"):
+        import xml.etree.ElementTree as ET
+
         catalog_url = "https://sdmxcentral.imf.org/sdmx/v2/structure/dataflow?detail=allstubs"
 
         try:
             r = requests.get(
                 catalog_url,
                 timeout=30,
-                headers={"User-Agent": "Mozilla/5.0"}
+                headers={
+                    "User-Agent": "Mozilla/5.0",
+                    "Accept": "application/xml,text/xml,application/json,*/*"
+                }
             )
 
             st.write("URL testée :", catalog_url)
@@ -905,44 +912,94 @@ if st.button("Récupérer les données →"):
             st.write("Longueur réponse :", len(r.content))
 
             r.raise_for_status()
-            data = r.json()
 
-            dataflows = data.get("data", {}).get("dataflows", [])
-            st.write("Nombre total de dataflows :", len(dataflows))
-
+            content_type = (r.headers.get("Content-Type") or "").lower()
             matches = []
+            preview = []
 
-            for flow in dataflows:
-                flow_id = flow.get("id", "")
-                agency = flow.get("agencyID", "")
+            if "json" in content_type:
+                data = r.json()
+                dataflows = data.get("data", {}).get("dataflows", [])
+                st.write("Format détecté : JSON")
+                st.write("Nombre total de dataflows :", len(dataflows))
 
-                name = ""
-                names = flow.get("name", [])
-                if isinstance(names, list) and names:
-                    name = names[0].get("value", "")
-                elif isinstance(names, dict):
-                    name = names.get("en", "") or str(names)
+                for flow in dataflows:
+                    flow_id = flow.get("id", "")
+                    agency = flow.get("agencyID", "")
 
-                description = ""
-                descriptions = flow.get("description", [])
-                if isinstance(descriptions, list) and descriptions:
-                    description = descriptions[0].get("value", "")
-                elif isinstance(descriptions, dict):
-                    description = descriptions.get("en", "") or str(descriptions)
+                    name = ""
+                    names = flow.get("name", [])
+                    if isinstance(names, list) and names:
+                        name = names[0].get("value", "")
+                    elif isinstance(names, dict):
+                        name = names.get("en", "") or str(names)
 
-                search_text = f"{flow_id} {agency} {name} {description}".lower()
+                    description = ""
+                    descriptions = flow.get("description", [])
+                    if isinstance(descriptions, list) and descriptions:
+                        description = descriptions[0].get("value", "")
+                    elif isinstance(descriptions, dict):
+                        description = descriptions.get("en", "") or str(descriptions)
 
-                if (
-                    "weo" in search_text
-                    or "world economic outlook" in search_text
-                    or "economic outlook" in search_text
-                ):
-                    matches.append({
+                    item = {
                         "id": flow_id,
                         "agency": agency,
                         "name": name,
                         "description": description
-                    })
+                    }
+
+                    if len(preview) < 30:
+                        preview.append(item)
+
+                    search_text = f"{flow_id} {agency} {name} {description}".lower()
+                    if "weo" in search_text or "world economic outlook" in search_text or "economic outlook" in search_text:
+                        matches.append(item)
+
+            else:
+                st.write("Format détecté : XML")
+                root = ET.fromstring(r.content)
+
+                # Namespaces SDMX les plus fréquents
+                namespaces = {
+                    "str": "http://www.sdmx.org/resources/sdmxml/schemas/v2_1/structure",
+                    "com": "http://www.sdmx.org/resources/sdmxml/schemas/v2_1/common",
+                }
+
+                # Recherche souple : tous les éléments dont le nom local est Dataflow
+                dataflows = []
+                for elem in root.iter():
+                    if elem.tag.endswith("Dataflow"):
+                        dataflows.append(elem)
+
+                st.write("Nombre total de dataflows :", len(dataflows))
+
+                for flow in dataflows:
+                    flow_id = flow.attrib.get("id", "")
+                    agency = flow.attrib.get("agencyID", "") or flow.attrib.get("agency", "")
+
+                    name = ""
+                    description = ""
+
+                    for child in flow.iter():
+                        local = child.tag.split("}")[-1]
+                        if local == "Name" and not name:
+                            name = (child.text or "").strip()
+                        elif local == "Description" and not description:
+                            description = (child.text or "").strip()
+
+                    item = {
+                        "id": flow_id,
+                        "agency": agency,
+                        "name": name,
+                        "description": description
+                    }
+
+                    if len(preview) < 30:
+                        preview.append(item)
+
+                    search_text = f"{flow_id} {agency} {name} {description}".lower()
+                    if "weo" in search_text or "world economic outlook" in search_text or "economic outlook" in search_text:
+                        matches.append(item)
 
             st.write("Nombre de résultats liés au WEO :", len(matches))
 
@@ -952,21 +1009,13 @@ if st.button("Récupérer les données →"):
                 st.warning("Aucun dataflow WEO trouvé avec les mots-clés actuels.")
 
             with st.expander("Aperçu des 30 premiers dataflows", expanded=False):
-                preview = []
-                for flow in dataflows[:30]:
-                    names = flow.get("name", [])
-                    if isinstance(names, list) and names:
-                        name = names[0].get("value", "")
-                    elif isinstance(names, dict):
-                        name = names.get("en", "") or str(names)
-                    else:
-                        name = ""
-                    preview.append({
-                        "id": flow.get("id", ""),
-                        "agency": flow.get("agencyID", ""),
-                        "name": name
-                    })
-                st.dataframe(pd.DataFrame(preview), use_container_width=True, hide_index=True)
+                if preview:
+                    st.dataframe(pd.DataFrame(preview), use_container_width=True, hide_index=True)
+                else:
+                    st.write("Aucun aperçu disponible.")
+
+            with st.expander("Aperçu brut de la réponse FMI", expanded=False):
+                st.text(r.text[:5000])
 
         except Exception as e:
             st.error(f"Erreur recherche catalogue FMI : {e}")
