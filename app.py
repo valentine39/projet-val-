@@ -1,119 +1,91 @@
 import streamlit as st
 import pdfplumber
 import pandas as pd
-import numpy as np
-import plotly.express as px
+import requests
 import re
+import plotly.express as px
 
-st.set_page_config(page_title="IMF Data AI", layout="wide")
+# --- CONFIGURATION & STYLE ---
+st.set_page_config(page_title="Expert Pays - Pilier 1 & 2", layout="wide")
+st.markdown("""<style> .stMetric { background-color: #f8f9fa; padding: 10px; border-radius: 10px; } </style>""", unsafe_allow_html=True)
 
-def solve_imf_structure(df):
-    """Analyse et répare la structure du tableau sans intervention humaine"""
-    # Nettoyage de base
-    df = df.replace(['None', '—', '...', ' .', '-', ''], np.nan)
-    
-    # 1. Fusionner les colonnes de texte à gauche (souvent coupées au FMI)
-    # On regarde les colonnes qui ne contiennent presque que du texte
-    text_cols = []
-    for col in df.columns:
-        is_numeric_col = df[col].astype(str).str.contains(r'\d', na=False).sum() > (len(df) * 0.3)
-        if not is_numeric_col:
-            text_cols.append(col)
-        else:
-            break # On s'arrête dès qu'on trouve des chiffres
-    
-    if len(text_cols) > 1:
-        new_col = df[text_cols].fillna("").astype(str).agg(" ".join, axis=1).str.strip()
-        df = df.drop(columns=text_cols)
-        df.insert(0, "Indicateur", new_col)
-    
-    # 2. Détecter l'en-tête (Années)
-    header_idx = 0
-    for i, row in df.iterrows():
-        year_matches = sum(1 for x in row if re.match(r'^(19|20)\d{2}$', str(x).strip()))
-        if year_matches >= 2:
-            header_idx = i
-            break
+# --- FONCTIONS DE COLLECTE (PILIER 1) ---
+def get_world_bank_data(country_code):
+    indicators = {
+        'NY.GDP.PCAP.CD': 'PIB/hab (USD)',
+        'SI.POV.GINI': 'Indice Gini',
+        'NY.GDP.MKTP.KD.ZG': 'Croissance PIB (%)'
+    }
+    data = {}
+    for code, name in indicators.items():
+        try:
+            url = f"https://api.worldbank.org/v2/country/{country_code}/indicator/{code}?format=json&per_page=1"
+            res = requests.get(url).json()
+            data[name] = res[1][0]['value'], res[1][0]['date']
+        except: data[name] = ("N/A", "N/A")
+    return data
+
+# --- FONCTION D'EXTRACTION PDF (PILIER 2 - ZERO CONFIG) ---
+def extract_imf_table(file):
+    with pdfplumber.open(file) as pdf:
+        for page in pdf.pages[:15]: # Scan auto des 15 premières pages
+            text = page.extract_text()
+            if text and "Selected Economic" in text:
+                table = page.extract_table({"vertical_strategy": "text", "horizontal_strategy": "text", "text_x_tolerance": 3})
+                if table:
+                    df = pd.DataFrame(table)
+                    # Nettoyage automatique des "None" et suture des titres
+                    df = df.replace(['None', '—', '...', ''], np.nan).dropna(how='all', axis=1)
+                    return df
+    return None
+
+# --- INTERFACE ---
+st.title("🌍 Générateur de Fiche Pays (Piliers 1 & 2)")
+col_a, col_b = st.columns(2)
+
+with col_a:
+    country_name = st.text_input("Nom du pays (ex: Azerbaijan, Argentina)", "Azerbaijan")
+    country_iso = st.text_input("Code ISO (2 lettres - ex: AZ, AR)", "AZ")
+
+with col_b:
+    pdf_file = st.file_uploader("Déposer le rapport Article IV (PDF)", type="pdf")
+
+if st.button("Lancer l'analyse complète"):
+    # 1. RÉCUPÉRATION PILIER 1
+    st.subheader("📊 Pilier 1 : Données Socio-économiques (API)")
+    wb_data = get_world_bank_data(country_iso)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("PIB/hab", f"{wb_data['PIB/hab (USD)'][0]} $", f"Année: {wb_data['PIB/hab (USD)'][1]}")
+    c2.metric("Gini", wb_data['Indice Gini'][0], f"Année: {wb_data['Indice Gini'][1]}")
+    c3.metric("Croissance", f"{wb_data['Croissance PIB (%)'][0]} %")
+
+    # 2. RÉCUPÉRATION PILIER 2
+    st.subheader("🏗️ Pilier 2 : Modèle de croissance (PDF)")
+    if pdf_file:
+        df_imf = extract_imf_table(pdf_file)
+        if df_imf is not None:
+            st.success("Tableau FMI détecté et structuré.")
+            st.dataframe(df_imf.head(10), use_container_width=True)
             
-    df.columns = [str(c).strip() for c in df.iloc[header_idx]]
-    df = df.iloc[header_idx + 1:].reset_index(drop=True)
-    
-    # 3. Nettoyer les lignes de notes/sources (si trop de NaN ou mots clés)
-    def is_valid_row(row):
-        txt = str(row.iloc[0]).lower()
-        if any(w in txt for w in ["source", "note:", "1/", "prepared"]): return False
-        return row.notna().sum() > 2 # Au moins 2 colonnes remplies
-
-    df = df[df.apply(is_valid_row, axis=1)]
-
-    # 4. Conversion numérique forcée
-    for col in df.columns[1:]:
-        df[col] = (df[col].astype(str)
-                   .str.replace(',', '')
-                   .str.replace(' ', '')
-                   .str.replace(r'\((\d+\.?\d*)\)', r'-\1', regex=True))
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-    
-    return df
-
-st.title("📊 IMF Automatic Table Insight")
-st.write("Analyse automatique des rapports Article IV (Azerbaïdjan, Argentine, etc.)")
-
-file = st.file_uploader("Glissez le rapport PDF ici", type="pdf")
-
-if file:
-    with st.spinner("Analyse du document..."):
-        all_detected_tables = []
-        with pdfplumber.open(file) as pdf:
-            # On scanne les 20 premières pages pour trouver les tableaux financiers
-            for page_idx, page in enumerate(pdf.pages[:20]):
-                tables = page.extract_tables({"vertical_strategy": "text", "horizontal_strategy": "text", "text_x_tolerance": 3})
-                for t_idx, t in enumerate(tables):
-                    df_raw = pd.DataFrame(t)
-                    if len(df_raw.columns) > 4 and len(df_raw) > 5:
-                        try:
-                            clean_df = solve_imf_structure(df_raw)
-                            if not clean_df.empty:
-                                name = f"Tableau Page {page_idx + 1} (Ref {t_idx+1})"
-                                all_detected_tables.append({"name": name, "df": clean_df})
-                        except:
-                            continue
-
-        if all_detected_tables:
-            # Choix du tableau (souvent le premier est le bon)
-            selected_table = st.selectbox("Tableaux détectés :", [t["name"] for t in all_detected_tables])
-            final_df = next(t["df"] for t in all_detected_tables if t["name"] == selected_table)
-            
-            # --- Visualisation ---
+            # --- GÉNÉRATION DU PROMPT FINAL ---
             st.divider()
-            col1, col2 = st.columns([1, 2])
+            st.subheader("📝 Prompt IA pour la Fiche Pays")
             
-            with col1:
-                indicator = st.selectbox("Sélectionnez un indicateur :", final_df.iloc[:, 0].unique())
-                data_row = final_df[final_df.iloc[:, 0] == indicator].iloc[0]
-                
-                # Petit résumé
-                last_val = data_row.iloc[-1]
-                prev_val = data_row.iloc[-2]
-                delta = None
-                if isinstance(last_val, (int, float)) and isinstance(prev_val, (int, float)):
-                    delta = round(last_val - prev_val, 2)
-                
-                st.metric(label=indicator, value=last_val, delta=delta)
-                
-            with col2:
-                plot_df = pd.DataFrame({
-                    "Année": final_df.columns[1:],
-                    "Valeur": data_row[1:].values
-                }).dropna()
-                
-                fig = px.line(plot_df, x="Année", y="Valeur", markers=True, 
-                             title=f"Evolution de : {indicator}",
-                             line_shape="linear", template="plotly_white")
-                st.plotly_chart(fig, use_container_width=True)
-
-            with st.expander("Consulter les données complètes"):
-                st.dataframe(final_df, use_container_width=True)
-                st.download_button("Télécharger CSV", final_df.to_csv(index=False), "data_fmi.csv")
+            prompt = f"""
+            Tu es un expert en analyse macroéconomique. Rédige une analyse pour : {country_name}.
+            
+            DONNÉES DISPONIBLES :
+            - PIB/hab : {wb_data['PIB/hab (USD)'][0]} (Source: BM)
+            - Gini : {wb_data['Indice Gini'][0]}
+            - Extraits FMI : {df_imf.iloc[:10, :5].to_string()}
+            
+            CONSIGNES :
+            1. Rédige le Pilier 1 (Environnement politique) en 3 paragraphes : Politique brute, Analyse Gouvernance (V-Dem/BM), et Socio-éco.
+            2. Rédige le Pilier 2 (Modèle de croissance) avec deux sections explicites : "Modèle économique :" et "Régime de croissance :". 
+            Respecte un style institutionnel, dense, sans bullet points. Rattache chaque analyse à un chiffre.
+            """
+            st.text_area("Copiez ce prompt dans votre IA :", prompt, height=300)
         else:
-            st.error("Aucun tableau macroéconomique n'a été détecté automatiquement.")
+            st.warning("Tableau FMI non trouvé. Vérifiez que le PDF est bien un rapport Article IV.")
+    else:
+        st.info("Veuillez charger un PDF pour compléter le Pilier 2.")
