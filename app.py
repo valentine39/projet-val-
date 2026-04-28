@@ -2,68 +2,78 @@ import streamlit as st
 import pdfplumber
 import pandas as pd
 import numpy as np
-import re
+import plotly.express as px
 
-st.set_page_config(page_title="IMF Final Extractor", layout="wide")
+st.set_page_config(page_title="IMF Data Intelligence", layout="wide")
 
-def merge_text_columns(df, num_text_cols=3):
-    """Fusionne les X premières colonnes si elles contiennent du texte découpé"""
-    df = df.copy()
-    # On remplace les None par du vide pour la fusion
-    for i in range(num_text_cols):
-        df.iloc[:, i] = df.iloc[:, i].fillna("")
+# --- FONCTIONS DE NETTOYAGE ---
+def clean_data(df, rows_to_drop):
+    # 1. Supprimer les colonnes totalement vides
+    df = df.dropna(how='all', axis=1)
     
-    # On crée la nouvelle colonne 0 en fusionnant les colonnes choisies
-    combined = df.iloc[:, 0].astype(str)
-    for i in range(1, num_text_cols):
-        combined = combined + df.iloc[:, i].astype(str)
+    # 2. Remplacer les "None" et symboles par du vide
+    df = df.replace(['None', '—', '...', ' .', '-', ''], np.nan)
     
-    # On nettoie les espaces en trop
-    df.iloc[:, 0] = combined.apply(lambda x: " ".join(x.split()))
+    # 3. Supprimer les lignes de sources (53, 55, 56 par ex)
+    # On ajuste l'index car Python commence à 0
+    indices_to_drop = [i-1 for i in rows_to_drop if i-1 < len(df)]
+    df = df.drop(df.index[indices_to_drop], errors='ignore')
     
-    # On supprime les colonnes qui ont été fusionnées
-    cols_to_drop = [df.columns[i] for i in range(1, num_text_cols)]
-    df = df.drop(columns=cols_to_drop)
     return df
 
-st.title("📊 Extracteur FMI (Correction des Libellés)")
+st.title("📈 Analyseur d'Indicateurs FMI")
 
-uploaded_file = st.file_uploader("Charger le PDF", type="pdf")
-
-with st.sidebar:
-    st.header("1. Réglages PDF")
-    page_num = st.number_input("Page", min_value=1, value=5)
-    x_tol = st.slider("Précision colonnes (x_tol)", 1, 10, 3)
-    
-    st.header("2. Correction Libellés")
-    nb_cols_merge = st.number_input("Nb de colonnes à fusionner à gauche", min_value=1, max_value=5, value=3)
-    st.info("Si 'Consumer' et 'Price' sont dans 2 colonnes différentes, augmentez ce chiffre.")
+uploaded_file = st.file_uploader("Charger le PDF Article IV", type="pdf")
 
 if uploaded_file:
     with pdfplumber.open(uploaded_file) as pdf:
+        # Configuration Sidebar
+        page_num = st.sidebar.number_input("Page du tableau", min_value=1, value=5)
+        st.sidebar.subheader("Nettoyage")
+        footer_rows = st.sidebar.text_input("Lignes à supprimer (ex: 53, 55, 56)", "53, 55, 56")
+        
+        # Extraction
         page = pdf.pages[page_num - 1]
-        
-        table_settings = {
-            "vertical_strategy": "text",
-            "horizontal_strategy": "text",
-            "text_x_tolerance": x_tol,
-            "text_y_tolerance": 3,
-        }
-        
-        table = page.extract_table(table_settings)
+        table = page.extract_table({"vertical_strategy": "text", "horizontal_strategy": "text", "text_x_tolerance": 3})
         
         if table:
-            df = pd.DataFrame(table)
+            raw_df = pd.DataFrame(table)
             
-            # Application de la soudure des colonnes
-            df = merge_text_columns(df, num_text_cols=nb_cols_merge)
+            # Application du nettoyage
+            to_drop = [int(x.strip()) for x in footer_rows.split(",") if x.strip().isdigit()]
+            df = clean_data(raw_df, to_drop)
             
-            # Nettoyage des lignes vides
-            df = df.replace(['', 'None', None], np.nan).dropna(how='all')
-
-            st.subheader("Visualisation du tableau corrigé")
+            # --- INTERACTION ---
+            st.subheader("1. Aperçu des données extraites")
             st.dataframe(df, use_container_width=True)
 
-            # Export
-            csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Télécharger CSV Corrigé", csv, "fmi_total_clean.csv")
+            # Préparation pour le graphique
+            # On suppose que la col 0 = indicateurs et les autres = années
+            if st.checkbox("Activer l'analyse graphique"):
+                try:
+                    # On définit la ligne des années (souvent la ligne 1 ou 2)
+                    header_row_idx = st.number_input("Index de la ligne contenant les années", 0, 5, 1)
+                    years = df.iloc[header_row_idx, 1:].values
+                    
+                    # Sélection de l'indicateur
+                    indicators = df.iloc[header_row_idx+1:, 0].dropna().unique()
+                    selected_ind = st.selectbox("Sélectionnez un indicateur pour voir l'évolution", indicators)
+                    
+                    # Extraction des valeurs pour l'indicateur choisi
+                    row_data = df[df.iloc[:, 0] == selected_ind].iloc[0, 1:].values
+                    
+                    # Conversion en numérique (on enlève les virgules et espaces)
+                    clean_values = [float(str(x).replace(',', '').replace(' ', '')) if pd.notnull(x) else np.nan for x in row_data]
+                    
+                    # Création du DataFrame pour le graph
+                    chart_df = pd.DataFrame({
+                        "Année": years,
+                        selected_ind: clean_values
+                    }).dropna()
+
+                    # Affichage du graphique
+                    fig = px.line(chart_df, x="Année", y=selected_ind, markers=True, title=f"Évolution de : {selected_ind}")
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                except Exception as e:
+                    st.warning(f"Ajustez les lignes d'en-tête pour activer le graphique. Erreur : {e}")
