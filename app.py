@@ -5,6 +5,7 @@ import re
 import pandas as pd
 import os
 from datetime import datetime
+from io import BytesIO
 
 # ─────────────────────────────────────────────
 # Configuration
@@ -256,21 +257,128 @@ def fetch_wb_country_info(country_code):
         return None
 
 
-def fetch_undp_hdi(iso3):
-    """Récupère IDH via l'API PNUD HDR."""
+@st.cache_data(ttl=86400)
+def load_undp_hdi_table():
+    """
+    Télécharge le fichier Excel officiel du Human Development Report 2025
+    et extrait mécaniquement les lignes pays : rang, pays, valeur IDH.
+    La fonction ne dépend pas des noms de colonnes, souvent instables dans les annexes Excel.
+    """
+    url = "https://hdr.undp.org/sites/default/files/2025_HDR/HDR25_Statistical_Annex_HDI_Table.xlsx"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/octet-stream,*/*",
+        "Referer": "https://hdr.undp.org/data-center/documentation-and-downloads",
+    }
+
+    r = requests.get(url, headers=headers, timeout=30)
+    r.raise_for_status()
+
+    excel_file = BytesIO(r.content)
+    df_raw = pd.read_excel(excel_file, header=None, engine="openpyxl")
+
+    rows = []
+    for _, row in df_raw.iterrows():
+        values = list(row.dropna())
+
+        if len(values) < 3:
+            continue
+
+        rank = values[0]
+        country = values[1]
+        hdi = values[2]
+
+        try:
+            rank_int = int(rank)
+            hdi_float = float(hdi)
+
+            if 0 < hdi_float <= 1:
+                rows.append({
+                    "rank": rank_int,
+                    "country": str(country).strip(),
+                    "hdi": hdi_float
+                })
+        except Exception:
+            continue
+
+    return pd.DataFrame(rows)
+
+
+def fetch_undp_hdi(iso3=None, country_name=None):
+    """
+    Récupère la valeur d'IDH et le rang mondial depuis l'annexe Excel officielle du HDR 2025.
+    Retourne un dictionnaire stable pour éviter les erreurs de déballage.
+    """
+    source_url = "https://hdr.undp.org/sites/default/files/2025_HDR/HDR25_Statistical_Annex_HDI_Table.xlsx"
+
+    aliases = {
+        "Timor-Leste": ["Timor-Leste"],
+        "RDC (Congo-Kinshasa)": ["Congo (Democratic Republic of the)", "Democratic Republic of the Congo"],
+        "Congo (Brazzaville)": ["Congo"],
+        "Côte d'Ivoire": ["Côte d'Ivoire", "Cote d'Ivoire"],
+        "Birmanie (Myanmar)": ["Myanmar"],
+        "Sao Tomé-et-Principe": ["Sao Tome and Principe", "São Tomé and Príncipe"],
+        "Eswatini": ["Eswatini (Kingdom of)", "Eswatini"],
+        "Tanzanie": ["Tanzania (United Republic of)", "United Republic of Tanzania"],
+        "Bolivie": ["Bolivia (Plurinational State of)", "Bolivia"],
+        "Venezuela": ["Venezuela (Bolivarian Republic of)", "Venezuela"],
+        "Laos": ["Lao People's Democratic Republic"],
+        "Iran": ["Iran (Islamic Republic of)"],
+        "Syrie": ["Syrian Arab Republic"],
+        "Vietnam": ["Viet Nam"],
+    }
+
     try:
-        url = f"https://api.hdr.undp.org/api/indicators/137906?iso={iso3}&latest=true"
-        r = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
-        r.raise_for_status()
-        data = r.json()
-        countries = data.get("data", {}).get("countries", [])
-        if countries:
-            for ind in countries[0].get("indicators", []):
-                if str(ind.get("id")) == "137906":
-                    return ind.get("value"), ind.get("year")
-        return None, None
-    except Exception:
-        return None, None
+        df = load_undp_hdi_table()
+
+        if df.empty:
+            return {
+                "value": None,
+                "rank": None,
+                "year": 2023,
+                "source_url": source_url,
+                "error": "Table IDH vide ou structure Excel non reconnue."
+            }
+
+        row = pd.DataFrame()
+
+        possible_names = []
+        if country_name:
+            possible_names.append(country_name)
+            possible_names.extend(aliases.get(country_name, []))
+
+        possible_names_norm = [x.lower().strip() for x in possible_names]
+
+        if possible_names_norm:
+            row = df[df["country"].str.lower().str.strip().isin(possible_names_norm)]
+
+        if row.empty:
+            return {
+                "value": None,
+                "rank": None,
+                "year": 2023,
+                "source_url": source_url,
+                "error": f"Pays introuvable dans la table IDH : {country_name}"
+            }
+
+        first = row.iloc[0]
+        return {
+            "value": float(first["hdi"]),
+            "rank": int(first["rank"]),
+            "year": 2023,
+            "source_url": source_url,
+            "error": None
+        }
+
+    except Exception as e:
+        return {
+            "value": None,
+            "rank": None,
+            "year": 2023,
+            "source_url": source_url,
+            "error": str(e)
+        }
 
 
 def flag_old(year):
@@ -297,6 +405,543 @@ def ind(label, value, unit, year, source, url=None, note=None):
         "Note": age_flag,
     }
 
+
+
+def make_unique_columns(df):
+    """
+    Streamlit / PyArrow refuse les DataFrames avec noms de colonnes dupliqués.
+    Les tableaux PDF FMI ont souvent des colonnes vides ou répétées : on les renomme proprement.
+    """
+    df = df.copy()
+    seen = {}
+    new_cols = []
+
+    for col in df.columns:
+        col = str(col).strip() if col is not None else "colonne"
+        if col == "" or col.lower() == "none":
+            col = "colonne"
+
+        if col in seen:
+            seen[col] += 1
+            new_cols.append(f"{col}_{seen[col]}")
+        else:
+            seen[col] = 0
+            new_cols.append(col)
+
+    df.columns = new_cols
+    return df
+
+
+# ─────────────────────────────────────────────
+# Article IV FMI — extraction depuis PDF uploadé
+# ─────────────────────────────────────────────
+
+ARTICLE_IV_THEMES = {
+    "Croissance et activité": [
+        "growth", "real gdp", "gdp growth", "output", "economic activity",
+        "domestic demand", "consumption", "investment", "recovery", "potential growth"
+    ],
+    "Inflation et politique monétaire": [
+        "inflation", "consumer prices", "monetary policy", "policy rate",
+        "central bank", "exchange rate", "real interest", "liquidity"
+    ],
+    "Finances publiques": [
+        "fiscal", "budget", "overall balance", "primary balance", "revenue",
+        "tax", "expenditure", "wage bill", "subsidies", "public investment"
+    ],
+    "Dette publique et soutenabilité": [
+        "public debt", "debt sustainability", "debt-to-gdp", "debt service",
+        "interest payments", "arrears", "dsf", "dsa", "sovereign"
+    ],
+    "Comptes externes": [
+        "current account", "trade balance", "exports", "imports", "remittances",
+        "foreign direct investment", "fdi", "external financing", "balance of payments"
+    ],
+    "Liquidité externe et réserves": [
+        "international reserves", "foreign reserves", "reserve coverage",
+        "months of imports", "external debt", "short-term debt", "gross reserves"
+    ],
+    "Système financier et banques": [
+        "financial sector", "banking sector", "capital adequacy", "npl",
+        "nonperforming loans", "loan-to-deposit", "profitability", "roe", "roa",
+        "credit growth", "private sector credit", "liquidity ratio"
+    ],
+    "Risques et recommandations FMI": [
+        "risks", "downside risks", "policy recommendations", "staff recommends",
+        "authorities should", "structural reforms", "outlook", "vulnerabilities"
+    ],
+    "Climat et vulnérabilités structurelles": [
+        "climate", "natural disaster", "resilience", "adaptation", "mitigation",
+        "food security", "energy", "commodity prices", "fragility"
+    ],
+}
+
+
+def _safe_import_pdfplumber():
+    try:
+        import pdfplumber
+        return pdfplumber, None
+    except Exception as e:
+        return None, str(e)
+
+
+def extract_article_iv_pages(uploaded_pdf):
+    """
+    Extrait le texte page par page d'un PDF Article IV.
+    Fonctionne surtout pour les PDFs FMI numériques. Les PDFs scannés nécessitent de l'OCR.
+    """
+    pdfplumber, error = _safe_import_pdfplumber()
+    if error:
+        return [], f"pdfplumber indisponible : {error}. Ajoutez pdfplumber dans requirements.txt."
+
+    try:
+        uploaded_pdf.seek(0)
+        pages = []
+        with pdfplumber.open(uploaded_pdf) as pdf:
+            for page_number, page in enumerate(pdf.pages, start=1):
+                text = page.extract_text(x_tolerance=1, y_tolerance=3) or ""
+                if text.strip():
+                    pages.append({"page": page_number, "text": text})
+        return pages, None
+    except Exception as e:
+        return [], f"Erreur extraction texte PDF : {e}"
+
+
+def extract_article_iv_tables(uploaded_pdf, max_tables=30):
+    """
+    Extrait les tableaux détectés dans le PDF. Les tableaux FMI complexes peuvent nécessiter
+    une vérification manuelle : cette extraction sert surtout à repérer les tableaux utiles.
+    """
+    pdfplumber, error = _safe_import_pdfplumber()
+    if error:
+        return [], f"pdfplumber indisponible : {error}. Ajoutez pdfplumber dans requirements.txt."
+
+    try:
+        uploaded_pdf.seek(0)
+        tables_out = []
+        with pdfplumber.open(uploaded_pdf) as pdf:
+            for page_number, page in enumerate(pdf.pages, start=1):
+                tables = page.extract_tables() or []
+                for table_id, table in enumerate(tables, start=1):
+                    if not table or len(table) < 2:
+                        continue
+
+                    # Nettoyage minimal
+                    cleaned = []
+                    for row in table:
+                        cleaned.append([
+                            re.sub(r"\s+", " ", str(cell)).strip() if cell is not None else ""
+                            for cell in row
+                        ])
+
+                    header = cleaned[0]
+                    body = cleaned[1:]
+
+                    # Évite les tableaux illisibles vides
+                    non_empty_cells = sum(1 for row in cleaned for cell in row if cell)
+                    if non_empty_cells < 6:
+                        continue
+
+                    try:
+                        df = pd.DataFrame(body, columns=header)
+                    except Exception:
+                        df = pd.DataFrame(cleaned)
+
+                    df = make_unique_columns(df)
+
+                    tables_out.append({
+                        "page": page_number,
+                        "table_id": table_id,
+                        "data": df
+                    })
+
+                    if len(tables_out) >= max_tables:
+                        return tables_out, None
+
+        return tables_out, None
+    except Exception as e:
+        return [], f"Erreur extraction tableaux PDF : {e}"
+
+
+def _extract_relevant_excerpt(text, keyword, window=900):
+    text_norm = re.sub(r"\s+", " ", text)
+    idx = text_norm.lower().find(keyword.lower())
+    if idx == -1:
+        return text_norm[:window]
+    start = max(0, idx - window // 2)
+    end = min(len(text_norm), idx + window // 2)
+    return text_norm[start:end].strip()
+
+
+def find_article_iv_theme_mentions(pages, max_hits_per_theme=4):
+    """
+    Repère les pages et extraits associés à chaque thème. On travaille par thèmes, pas par
+    indicateur strict, parce que les Article IV n'ont pas un format parfaitement standardisé.
+    """
+    rows = []
+
+    for theme, keywords in ARTICLE_IV_THEMES.items():
+        hits = []
+        for page in pages:
+            text_lower = page["text"].lower()
+            found_keyword = None
+            for kw in keywords:
+                if kw.lower() in text_lower:
+                    found_keyword = kw
+                    break
+
+            if found_keyword:
+                hits.append({
+                    "Thème": theme,
+                    "Page": page["page"],
+                    "Mot-clé détecté": found_keyword,
+                    "Extrait": _extract_relevant_excerpt(page["text"], found_keyword, window=1000)
+                })
+
+            if len(hits) >= max_hits_per_theme:
+                break
+
+        rows.extend(hits)
+
+    return pd.DataFrame(rows)
+
+
+def find_article_iv_numeric_sentences(pages, max_rows=80):
+    """
+    Repère des phrases utiles contenant des chiffres macro (% du PIB, points, USD, mois d'importations, etc.).
+    Ce n'est pas une extraction définitive : c'est une aide au repérage.
+    """
+    macro_words = [
+        "gdp", "growth", "inflation", "debt", "deficit", "balance", "current account",
+        "revenue", "expenditure", "reserves", "imports", "exports", "credit", "npl",
+        "capital adequacy", "fiscal", "primary", "public", "external"
+    ]
+
+    numeric_pattern = re.compile(
+        r"(\d+(?:[.,]\d+)?\s?(?:percent|per cent|%|percentage points|pp|months|billion|million|usd|us\$))",
+        re.IGNORECASE
+    )
+
+    rows = []
+    for page in pages:
+        text = re.sub(r"\s+", " ", page["text"])
+        sentences = re.split(r"(?<=[.!?])\s+", text)
+
+        for sent in sentences:
+            sent_lower = sent.lower()
+            if numeric_pattern.search(sent) and any(w in sent_lower for w in macro_words):
+                rows.append({
+                    "Page": page["page"],
+                    "Phrase avec donnée chiffrée": sent.strip()[:700]
+                })
+
+            if len(rows) >= max_rows:
+                return pd.DataFrame(rows)
+
+    return pd.DataFrame(rows)
+
+
+def score_article_iv_tables(tables):
+    """
+    Classe les tableaux extraits selon leur probabilité d'intérêt macro.
+    """
+    table_keywords = [
+        "gdp", "growth", "inflation", "fiscal", "revenue", "expenditure",
+        "debt", "current account", "exports", "imports", "reserves",
+        "balance", "bank", "credit", "npl", "capital", "external"
+    ]
+
+    rows = []
+    for item in tables:
+        df = item["data"]
+        text = " ".join(df.astype(str).fillna("").values.flatten().tolist()).lower()
+        score = sum(1 for kw in table_keywords if kw in text)
+
+        if score > 0:
+            preview = " | ".join(df.head(3).astype(str).fillna("").values.flatten().tolist())
+            rows.append({
+                "Page": item["page"],
+                "Table": item["table_id"],
+                "Score pertinence": score,
+                "Aperçu": preview[:500]
+            })
+
+    if not rows:
+        return pd.DataFrame()
+
+    return pd.DataFrame(rows).sort_values("Score pertinence", ascending=False)
+
+
+def build_article_iv_prompt(country_name, mentions_df, numeric_df, table_scores_df):
+    """
+    Construit un prompt IA distinct du prompt de données quantitatives.
+    Il demande une extraction prudente et vérifiable à partir du PDF.
+    """
+    lines = [
+        f"ARTICLE IV FMI — {country_name}",
+        "=" * 60,
+        "",
+        "Tu es un analyste risque pays. À partir des extraits d'un rapport Article IV du FMI,",
+        "identifie les informations macroéconomiques saillantes et les points d'attention.",
+        "",
+        "RÈGLES :",
+        "- Ne pas inventer de chiffres.",
+        "- Si une donnée n'est pas explicitement présente dans les extraits, dire qu'elle n'est pas disponible.",
+        "- Citer les pages mentionnées dans les extraits.",
+        "- Distinguer données observées, prévisions FMI et recommandations FMI lorsque c'est possible.",
+        "- Ne pas chercher une précision illusoire : les tableaux PDF peuvent être mal extraits.",
+        "",
+        "FORMAT ATTENDU :",
+        "1. Croissance, inflation et régime de croissance",
+        "2. Finances publiques et dette",
+        "3. Comptes externes et réserves",
+        "4. Système financier",
+        "5. Risques principaux et recommandations du FMI",
+        "",
+        "=" * 60,
+        "",
+    ]
+
+    if mentions_df is not None and not mentions_df.empty:
+        lines.append("EXTRAITS PAR THÈME")
+        for _, row in mentions_df.head(30).iterrows():
+            lines.append(
+                f"- {row['Thème']} | page {row['Page']} | mot-clé : {row['Mot-clé détecté']}\n"
+                f"  Extrait : {row['Extrait']}"
+            )
+        lines.append("")
+
+    if numeric_df is not None and not numeric_df.empty:
+        lines.append("PHRASES AVEC DONNÉES CHIFFRÉES")
+        for _, row in numeric_df.head(40).iterrows():
+            lines.append(f"- Page {row['Page']} : {row['Phrase avec donnée chiffrée']}")
+        lines.append("")
+
+    if table_scores_df is not None and not table_scores_df.empty:
+        lines.append("TABLEAUX POTENTIELLEMENT UTILES")
+        for _, row in table_scores_df.head(15).iterrows():
+            lines.append(
+                f"- Page {row['Page']}, tableau {row['Table']} "
+                f"(score {row['Score pertinence']}) : {row['Aperçu']}"
+            )
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────
+# Piliers consolidés — socio-politique et croissance
+# ─────────────────────────────────────────────
+
+def fetch_wb_history_values(country_code, indicator_code, n_years=25):
+    """
+    Récupère une série historique Banque mondiale et renvoie les observations non nulles,
+    triées par année croissante. Sert aux moyennes de croissance et tendances longues.
+    """
+    url = f"https://api.worldbank.org/v2/country/{country_code}/indicator/{indicator_code}?format=json&per_page=200"
+    try:
+        r = requests.get(url, timeout=25, headers={"User-Agent": "Mozilla/5.0"})
+        r.raise_for_status()
+        data = r.json()
+        if not isinstance(data, list) or len(data) < 2 or not data[1]:
+            return []
+        rows = []
+        for obs in data[1]:
+            if obs.get("value") is not None:
+                try:
+                    rows.append({"year": int(obs["date"]), "value": float(obs["value"])})
+                except Exception:
+                    continue
+        rows.sort(key=lambda x: x["year"])
+        return rows[-n_years:]
+    except Exception:
+        return []
+
+
+def latest_from_history(history):
+    if not history:
+        return None, None
+    last = history[-1]
+    return last.get("value"), last.get("year")
+
+
+def average_since(history, start_year=2010):
+    vals = [x["value"] for x in history if x.get("year") is not None and x["year"] >= start_year]
+    if not vals:
+        return None
+    return sum(vals) / len(vals)
+
+
+def average_last_n(history, n=10):
+    vals = [x["value"] for x in history[-n:]]
+    if not vals:
+        return None
+    return sum(vals) / len(vals)
+
+
+def add_wb_indicator(rows, label, value, year, unit, wb_indicator_code, note=None):
+    url = f"https://data.worldbank.org/indicator/{wb_indicator_code}" if wb_indicator_code else None
+    v = "N/D" if value is None else (f"{value:,.1f}" if isinstance(value, (int, float)) else value)
+    rows.append(ind(label, v, unit, year, "Banque mondiale", url, note))
+
+
+def build_sociopo_section(section_header, section_governance, section_labour, section_poverty, section_education):
+    """
+    Rassemble les données sociopolitiques dans un seul bloc lisible.
+    """
+    rows = []
+    rows.extend(section_header)
+    rows.extend(section_governance)
+    rows.extend(section_labour)
+    rows.extend(section_poverty)
+    rows.extend(section_education)
+    return rows
+
+
+def build_growth_section(wb_code):
+    """
+    Bloc 'Modèle économique et régime de croissance'.
+    Les données quantitatives viennent prioritairement de la Banque mondiale.
+    Les informations non standardisées sont signalées comme à chercher dans l'Article IV.
+    """
+    rows = []
+
+    # Séries principales
+    indicators = {
+        "NY.GDP.MKTP.CD": ("PIB nominal total", "USD courants"),
+        "NY.GDP.PCAP.CD": ("PIB par habitant", "USD courants"),
+        "NY.GDP.MKTP.KD.ZG": ("Croissance du PIB réel — dernière observation", "%"),
+        "FP.CPI.TOTL.ZG": ("Inflation annuelle", "%"),
+        "NV.AGR.TOTL.ZS": ("Agriculture — part du PIB", "% du PIB"),
+        "NV.IND.TOTL.ZS": ("Industrie — part du PIB", "% du PIB"),
+        "NV.IND.MANF.ZS": ("Manufacturier — part du PIB", "% du PIB"),
+        "NV.SRV.TOTL.ZS": ("Services — part du PIB", "% du PIB"),
+        "SL.AGR.EMPL.ZS": ("Emploi agricole", "% de l'emploi total"),
+        "SL.IND.EMPL.ZS": ("Emploi industriel", "% de l'emploi total"),
+        "SL.SRV.EMPL.ZS": ("Emploi dans les services", "% de l'emploi total"),
+        "NE.CON.PRVT.ZS": ("Consommation privée", "% du PIB"),
+        "NE.CON.GOVT.ZS": ("Consommation publique", "% du PIB"),
+        "NE.GDI.FTOT.ZS": ("Formation brute de capital fixe", "% du PIB"),
+        "NE.GDI.FPRV.ZS": ("Investissement privé", "% du PIB"),
+        "BX.KLT.DINV.WD.GD.ZS": ("IDE entrants nets", "% du PIB"),
+        "BX.TRF.PWKR.DT.GD.ZS": ("Transferts de migrants", "% du PIB"),
+        "FS.AST.PRVT.GD.ZS": ("Crédit domestique au secteur privé", "% du PIB"),
+        "NE.EXP.GNFS.ZS": ("Exportations de biens et services", "% du PIB"),
+        "NE.IMP.GNFS.ZS": ("Importations de biens et services", "% du PIB"),
+        "BN.CAB.XOKA.GD.ZS": ("Solde courant", "% du PIB"),
+    }
+
+    histories = {}
+    for code, (label, unit) in indicators.items():
+        hist = fetch_wb_history_values(wb_code, code, n_years=25)
+        histories[code] = hist
+        val, year = latest_from_history(hist)
+        add_wb_indicator(rows, label, val, year, unit, code)
+
+    # Moyennes de croissance
+    growth_hist = histories.get("NY.GDP.MKTP.KD.ZG", [])
+    avg_2010 = average_since(growth_hist, 2010)
+    avg_10y = average_last_n(growth_hist, 10)
+
+    rows.append(ind(
+        "Croissance moyenne du PIB réel depuis 2010",
+        f"{avg_2010:.1f}" if avg_2010 is not None else "N/D",
+        "%",
+        f"{min([x['year'] for x in growth_hist if x['year'] >= 2010], default='—')}-{max([x['year'] for x in growth_hist], default='—')}" if avg_2010 is not None else None,
+        "Calcul interne à partir de Banque mondiale",
+        "https://data.worldbank.org/indicator/NY.GDP.MKTP.KD.ZG",
+        None if avg_2010 is not None else "Série insuffisante pour calculer la moyenne"
+    ))
+
+    rows.append(ind(
+        "Croissance moyenne du PIB réel — 10 dernières observations",
+        f"{avg_10y:.1f}" if avg_10y is not None else "N/D",
+        "%",
+        f"{growth_hist[-10]['year']}-{growth_hist[-1]['year']}" if len(growth_hist) >= 10 else None,
+        "Calcul interne à partir de Banque mondiale",
+        "https://data.worldbank.org/indicator/NY.GDP.MKTP.KD.ZG",
+        None if avg_10y is not None else "Série insuffisante pour calculer la moyenne"
+    ))
+
+    # Indicateurs non standardisés : guider l'IA vers Article IV / sources sectorielles
+    qualitative_guides = [
+        ("Part du secteur extractif dans le PIB", "À rechercher dans l'Article IV FMI, les comptes nationaux détaillés ou les autorités statistiques."),
+        ("Part du secteur extractif dans les exportations", "À rechercher dans l'Article IV FMI, UN Comtrade/OEC ou les autorités douanières."),
+        ("Part du secteur extractif dans les recettes publiques", "À rechercher dans l'Article IV FMI, DSA FMI, EITI ou budget national."),
+        ("Part du tourisme dans le PIB", "À rechercher dans l'Article IV FMI, WTTC, UN Tourism ou autorités nationales."),
+        ("Part de la construction, immobilier ou finance dans le PIB", "À rechercher dans les comptes nationaux détaillés ou l'Article IV."),
+        ("Décomposition sectorielle fine de la croissance", "À rechercher dans l'Article IV FMI, rapport banque centrale ou comptes nationaux."),
+        ("Contribution consommation/investissement/exportations à la croissance", "À rechercher dans l'Article IV FMI ou les tableaux de comptes nationaux."),
+        ("Croissance potentielle FMI", "À rechercher dans l'Article IV FMI, généralement dans le texte ou les annexes."),
+        ("Prévisions FMI année en cours et année suivante", "À rechercher dans l'Article IV FMI, WEO ou World Bank MPO."),
+        ("Révisions des prévisions FMI/Banque mondiale", "À rechercher dans WEO/MPO et dans les communiqués récents."),
+        ("Réserves, durée de vie des ressources, fonds souverain", "À rechercher dans l'Article IV FMI, rapports sectoriels ou fonds souverain national."),
+        ("Réformes économiques récentes et chocs récents", "À rechercher dans l'Article IV FMI et les rapports Banque mondiale/MPO."),
+    ]
+
+    for label, note in qualitative_guides:
+        rows.append(ind(label, "À rechercher", None, None, "Article IV FMI / source sectorielle", "", note))
+
+    return rows
+
+
+def build_model_growth_prompt(country_name, growth_rows, article_iv_prompt_text=None):
+    """
+    Prompt spécifique pour produire le paragraphe 'Modèle économique et régime de croissance'.
+    """
+    lines = [
+        f"PAYS : {country_name}",
+        "",
+        "DONNÉES QUANTITATIVES DISPONIBLES — BLOC MODÈLE ÉCONOMIQUE ET RÉGIME DE CROISSANCE",
+        "=" * 80,
+    ]
+
+    for r in growth_rows:
+        label = r.get("Indicateur", "")
+        val = r.get("Valeur", "N/D")
+        unit = r.get("Unité", "")
+        year = r.get("Année", "—")
+        source = r.get("Source", "")
+        note = r.get("Note", "")
+        unit_str = f" {unit}" if unit else ""
+        year_str = f" ({year})" if year and year != "—" else ""
+        note_str = f" — Note : {note}" if note else ""
+        lines.append(f"- {label} : {val}{unit_str}{year_str} — Source : {source}{note_str}")
+
+    if article_iv_prompt_text:
+        lines += [
+            "",
+            "=" * 80,
+            "ÉLÉMENTS EXTRAITS DE L'ARTICLE IV FMI",
+            "=" * 80,
+            article_iv_prompt_text[:18000],
+        ]
+
+    lines += [
+        "",
+        "=" * 80,
+        "CONSIGNE DE RÉDACTION",
+        "=" * 80,
+        "À partir des données fournies, rédige un paragraphe intitulé « Modèle économique et régime de croissance », en respectant strictement le style, la structure et le niveau d’analyse des exemples fournis.",
+        "",
+        "Le texte doit être divisé en deux sous-parties explicites : « Modèle économique : » puis « Régime de croissance : ». Il doit être rédigé en paragraphes denses, sans bullet points, dans un style analytique, synthétique et institutionnel. Le ton doit être celui d’une fiche pays professionnelle : précis, nuancé, factuel, mais interprétatif. Ne fais pas de généralités vagues. Chaque affirmation analytique doit être rattachée à un chiffre, une tendance ou un mécanisme économique.",
+        "",
+        "Partie 1 — Modèle économique : commence par caractériser la structure productive du pays. Indique si l’économie est diversifiée ou non, industrialisée ou non, agricole, extractive, manufacturière, tertiarisée, rentière, ouverte, dépendante des importations ou tirée par la demande interne. Présente ensuite les principaux secteurs dans l’ordre de leur importance économique ou stratégique. Pour chaque secteur important, indique si possible sa part dans le PIB, sa part dans l’emploi, sa contribution aux exportations ou son rôle dans l’investissement. Ne te contente pas de lister les secteurs : explique ce que cette structure révèle du modèle économique.",
+        "",
+        "Identifie les forces structurelles du pays si elles sont directement appuyées par les données ou par l’Article IV : ressources naturelles, base industrielle, position exportatrice, capital humain, marché intérieur, intégration régionale, avantage comparatif, fonds souverain, tourisme, diaspora, agriculture productive. Identifie aussi les fragilités structurelles : faible diversification, dépendance à une rente, faiblesse du secteur privé formel, faible productivité, informalité, enclavement, déficit d’infrastructures, insuffisance du capital humain, exposition climatique, environnement des affaires dégradé, dépendance aux importations, faible transformation locale, surcapacités, désindustrialisation, crise immobilière, capture de rente, dépendance à un partenaire commercial dominant.",
+        "",
+        "Si une transformation structurelle est en cours, décris-la clairement : industrialisation, tertiarisation, re-primarisation, montée en gamme, libéralisation, intervention accrue de l’État, diversification, intégration aux chaînes de valeur, transition verte, développement extractif. Précise si cette transformation paraît solide, incomplète, contrainte ou risquée. Termine cette partie par une appréciation synthétique du modèle : ce qu’il permet, ce qu’il bloque, et le principal risque structurel qui en découle.",
+        "",
+        "Partie 2 — Régime de croissance : commence par qualifier le rythme de croissance sur longue période : dynamique, faible, volatile, résilient, ralenti, artificiellement soutenu, cyclique, dépendant des matières premières. Donne si possible la croissance moyenne sur 10 ans ou depuis 2010. Explique ensuite les moteurs de la croissance : consommation privée, investissement public, investissement privé, exportations, dépenses publiques, crédit, rente extractive, tourisme, agriculture, immobilier, transferts de migrants, aide extérieure, IDE, grands projets d’infrastructures, politique industrielle.",
+        "",
+        "Distingue clairement la tendance longue des évolutions récentes. Mentionne les chocs récents pertinents lorsque les données ou l’Article IV les documentent : Covid, guerre, coup d’État, crise immobilière, choc climatique, choc énergétique, sanctions, tensions commerciales, changement de gouvernement, réformes, ajustement budgétaire, baisse de l’aide, adhésion à une organisation régionale. Analyse la soutenabilité de la croissance : croissance forte mais peu inclusive, tirée par les dépenses publiques, dépendante du crédit, portée par un effet de base, vulnérable aux prix mondiaux, sans gains de productivité, ou faible malgré des atouts structurels.",
+        "",
+        "Termine par les perspectives et risques à moyen terme : demande externe, prix des matières premières, épuisement d’une rente, immobilier, endettement, instabilité politique, climat, conflit, fragmentation commerciale, baisse de l’aide, faiblesse du secteur privé, démographie, tensions sociales, insécurité, dépendance énergétique.",
+        "",
+        "Contraintes : ne pas inventer de chiffres. Si une donnée manque, ne pas la remplacer par une supposition. Tu peux formuler une inférence prudente, mais elle doit être explicitement fondée sur les données disponibles. Si une information ne peut être trouvée que dans l’Article IV et qu’aucun PDF n’a été fourni, signale qu’elle doit être vérifiée dans l’Article IV plutôt que de l’inventer.",
+    ]
+
+    return "\n".join(lines)
 
 # ─────────────────────────────────────────────
 # Construction du prompt IA
@@ -360,6 +1005,12 @@ wb_code = country_info["world_bank_code"]
 wb_url_base = f"https://data.worldbank.org/country/{country_info['wb_url_code']}"
 undp_url = f"https://hdr.undp.org/data-center/specific-country-data#/countries/{country_info['undp_code']}"
 
+uploaded_article_iv = st.file_uploader(
+    "Article IV FMI (optionnel) — déposer un PDF",
+    type=["pdf"],
+    help="Ajoutez ici un rapport Article IV du FMI. L'app extraira le texte, les passages macro et les tableaux détectables."
+)
+
 st.write("")
 
 if st.button("Récupérer les données →"):
@@ -394,7 +1045,7 @@ if st.button("Récupérer les données →"):
         forests_val, forests_year     = fetch_wb_latest(wb_code, "AG.LND.FRST.ZS")
         renewable_val, renewable_year = fetch_wb_latest(wb_code, "EG.FEC.RNEW.ZS")
 
-        hdi_val, hdi_year = fetch_undp_hdi(country_info["undp_code"])
+        hdi = fetch_undp_hdi(country_info["undp_code"], country_info["name"])
 
     # ── Section 1 : En-tête ──
     section_header = []
@@ -412,10 +1063,12 @@ if st.button("Récupérer les données →"):
 
     section_header.append(ind("EIU — Democracy Index", "Non disponible", None, None, "EIU", "https://www.eiu.com", "Accès abonnement requis"))
 
-    if hdi_val is not None:
-        section_header.append(ind("IDH — Valeur", f"{float(hdi_val):.3f}", None, hdi_year, "PNUD", undp_url))
+    if hdi.get("value") is not None:
+        section_header.append(ind("IDH — Valeur", f"{hdi['value']:.3f}", None, hdi["year"], "PNUD / Human Development Report", hdi["source_url"]))
+        if hdi.get("rank") is not None:
+            section_header.append(ind("IDH — Rang mondial", str(hdi["rank"]), None, hdi["year"], "PNUD / Human Development Report", hdi["source_url"]))
     else:
-        section_header.append(ind("IDH — Valeur", "N/D", None, None, "PNUD", undp_url, "API PNUD — vérifier le code pays"))
+        section_header.append(ind("IDH", "N/D", None, None, "PNUD / Human Development Report", hdi.get("source_url", undp_url), hdi.get("error", "Donnée indisponible")))
 
     section_header.append(ind("Statut de revenu (BM)", income_label, None, None, "Banque Mondiale", wb_url_base, ""))
     section_header.append(ind("Région BM", region, None, None, "Banque Mondiale", wb_url_base, ""))
@@ -482,45 +1135,195 @@ if st.button("Récupérer les données →"):
     section_climate.append(ind("ND-Gain Index", "N/D", None, None, "Notre Dame Global Adaptation Initiative", "https://gain.nd.edu/our-work/country-index/", "Téléchargement manuel requis — gain.nd.edu"))
     section_climate.append(ind("Biodiversity Intactness Index", "N/D", None, None, "UK Natural History Museum", "https://www.nhm.ac.uk/our-science/data/biodiversity-indicators/", "Téléchargement manuel requis — nhm.ac.uk"))
 
+    # ── Pilier 1 : Environnement politique et socioéconomique consolidé ──
+    pillar_sociopo = build_sociopo_section(
+        section_header,
+        section_governance,
+        section_labour,
+        section_poverty,
+        section_education
+    )
+
+    # ── Pilier 2 : Modèle économique et régime de croissance ──
+    with st.spinner("Construction du bloc Modèle économique et régime de croissance..."):
+        pillar_growth = build_growth_section(wb_code)
+
     # ══════════════════════════════════════
     # Affichage
     # ══════════════════════════════════════
-    DISPLAY_COLS = ["Indicateur", "Valeur", "Unité", "Année", "Source", "Note"]
+    DISPLAY_COLS = ["Indicateur", "Valeur", "Unité", "Année", "Source", "URL source", "Note"]
 
     def show_section(title, subtitle, rows, source_url=None, source_label=None):
         st.markdown(f'<div class="section-title">{title}</div>', unsafe_allow_html=True)
         st.markdown(f'<div class="section-subtitle">{subtitle}</div>', unsafe_allow_html=True)
+
         if not rows:
             st.markdown('<p class="warn-missing">Aucune donnée disponible.</p>', unsafe_allow_html=True)
             return
-        df = pd.DataFrame(rows)[DISPLAY_COLS]
-        st.dataframe(df, use_container_width=True, hide_index=True)
+
+        df = pd.DataFrame(rows)
+
+        # Garantit que toutes les colonnes attendues existent, même si une ligne est incomplète.
+        for col in DISPLAY_COLS:
+            if col not in df.columns:
+                df[col] = ""
+
+        df = df[DISPLAY_COLS]
+
+        # Évite les valeurs None dans la colonne de liens.
+        df["URL source"] = df["URL source"].fillna("").astype(str)
+
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "URL source": st.column_config.LinkColumn(
+                    "Lien vérifiable",
+                    display_text="ouvrir"
+                )
+            }
+        )
+
+        missing_links = df["URL source"].str.strip().eq("").sum()
+        if missing_links > 0:
+            st.markdown(
+                f'<p class="source-note">⚠️ {missing_links} indicateur(s) sans lien vérifiable direct : voir la colonne Note.</p>',
+                unsafe_allow_html=True
+            )
+
         if source_url:
-            st.markdown(f'<p class="source-note">🔗 <a href="{source_url}" target="_blank">{source_label or source_url}</a></p>', unsafe_allow_html=True)
+            st.markdown(
+                f'<p class="source-note">🔗 <a href="{source_url}" target="_blank">{source_label or source_url}</a></p>',
+                unsafe_allow_html=True
+            )
 
-    show_section("📋 En-tête",
-        "Gouvernance politique, positionnement économique, IDH — Sources : Freedom House · PNUD · Banque Mondiale",
-        section_header, "https://freedomhouse.org", "Freedom House · PNUD · Banque Mondiale")
+    show_section("📌 Pilier 1 — Environnement politique et socioéconomique",
+        "Bloc consolidé : Freedom House, IDH, statut de revenu, Gini, pauvreté, emploi, éducation et gouvernance WGI",
+        pillar_sociopo, "https://data.worldbank.org", "Freedom House · PNUD · Banque mondiale · WGI")
 
-    show_section("🏛️ Gouvernance (WGI)",
-        "6 indicateurs de gouvernance mondiale — échelle de −2,5 (mauvais) à +2,5 (bon)",
-        section_governance, "https://info.worldbank.org/governance/wgi/", "Banque Mondiale — Worldwide Governance Indicators")
+    with st.expander("Voir le détail des sous-sections socio-politiques"):
+        show_section("📋 En-tête",
+            "Gouvernance politique, positionnement économique, IDH — Sources : Freedom House · PNUD · Banque Mondiale",
+            section_header, "https://freedomhouse.org", "Freedom House · PNUD · Banque Mondiale")
 
-    show_section("💼 Marché du travail",
-        "Taux d'emploi, chômage jeunes, emploi féminin, informalité — Source : Banque Mondiale / OIT",
-        section_labour, wb_url_base, "Banque Mondiale")
+        show_section("🏛️ Gouvernance (WGI)",
+            "6 indicateurs de gouvernance mondiale — échelle de −2,5 (mauvais) à +2,5 (bon)",
+            section_governance, "https://info.worldbank.org/governance/wgi/", "Banque Mondiale — Worldwide Governance Indicators")
 
-    show_section("📊 Pauvreté et inégalités",
-        "Seuil de pauvreté extrême et distribution des revenus — Source : Banque Mondiale",
-        section_poverty, wb_url_base, "Banque Mondiale")
+        show_section("💼 Marché du travail",
+            "Taux d'emploi, chômage jeunes, emploi féminin, informalité — Source : Banque Mondiale / OIT",
+            section_labour, wb_url_base, "Banque Mondiale")
 
-    show_section("🎓 Éducation",
-        "Taux de scolarisation bruts par niveau — Source : Banque Mondiale / UNESCO",
-        section_education, wb_url_base, "Banque Mondiale / UNESCO")
+        show_section("📊 Pauvreté et inégalités",
+            "Seuil de pauvreté extrême et distribution des revenus — Source : Banque Mondiale",
+            section_poverty, wb_url_base, "Banque Mondiale")
+
+        show_section("🎓 Éducation",
+            "Taux de scolarisation bruts par niveau — Source : Banque Mondiale / UNESCO",
+            section_education, wb_url_base, "Banque Mondiale / UNESCO")
+
+    show_section("📈 Pilier 2 — Modèle économique et régime de croissance",
+        "Structure productive, emploi sectoriel, demande, financement, ouverture externe et croissance — Sources : Banque mondiale ; compléments à chercher dans l’Article IV",
+        pillar_growth, "https://data.worldbank.org", "Banque mondiale · Article IV FMI pour les informations non standardisées")
 
     show_section("🌿 Climat et environnement",
         "Émissions CO₂, forêts, mix énergétique — Source : Banque Mondiale · FAO · AIE · ND-Gain · NHM",
         section_climate, wb_url_base, "Banque Mondiale · FAO · AIE")
+
+    # ══════════════════════════════════════
+    # Article IV FMI — PDF uploadé
+    # ══════════════════════════════════════
+    article_iv_prompt_text = None
+
+    st.markdown("---")
+    st.markdown('<div class="section-title">📄 Article IV FMI — extraction depuis PDF</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-subtitle">Déposez un rapport Article IV pour repérer les passages macro, les phrases chiffrées et les tableaux utiles. '
+        'L’extraction reste indicative : les PDFs FMI ne sont pas parfaitement standardisés.</div>',
+        unsafe_allow_html=True
+    )
+
+    if uploaded_article_iv is None:
+        st.markdown(
+            '<p class="warn-missing">Aucun PDF Article IV déposé. Cette section est optionnelle.</p>',
+            unsafe_allow_html=True
+        )
+    else:
+        st.success(f"PDF chargé : {uploaded_article_iv.name}")
+
+        pages_text, text_error = extract_article_iv_pages(uploaded_article_iv)
+
+        if text_error:
+            st.error(text_error)
+        else:
+            st.write("Pages avec texte extrait :", len(pages_text))
+
+            mentions_df = find_article_iv_theme_mentions(pages_text)
+            numeric_df = find_article_iv_numeric_sentences(pages_text)
+
+            uploaded_article_iv.seek(0)
+            tables, table_error = extract_article_iv_tables(uploaded_article_iv)
+            if table_error:
+                st.warning(table_error)
+                tables = []
+
+            table_scores_df = score_article_iv_tables(tables)
+
+            col_pdf_1, col_pdf_2, col_pdf_3 = st.columns(3)
+            with col_pdf_1:
+                st.metric("Pages texte", len(pages_text))
+            with col_pdf_2:
+                st.metric("Tableaux détectés", len(tables))
+            with col_pdf_3:
+                st.metric("Passages thématiques", 0 if mentions_df.empty else len(mentions_df))
+
+            st.markdown("### Passages macro détectés")
+            if mentions_df.empty:
+                st.markdown('<p class="warn-missing">Aucun passage macro détecté automatiquement.</p>', unsafe_allow_html=True)
+            else:
+                st.dataframe(mentions_df, use_container_width=True, hide_index=True)
+
+            st.markdown("### Phrases chiffrées à vérifier")
+            if numeric_df.empty:
+                st.markdown('<p class="warn-missing">Aucune phrase chiffrée détectée automatiquement.</p>', unsafe_allow_html=True)
+            else:
+                st.dataframe(numeric_df, use_container_width=True, hide_index=True)
+
+            st.markdown("### Tableaux probablement utiles")
+            if table_scores_df.empty:
+                st.markdown('<p class="warn-missing">Aucun tableau macro clairement détecté.</p>', unsafe_allow_html=True)
+            else:
+                st.dataframe(table_scores_df, use_container_width=True, hide_index=True)
+
+            with st.expander("Voir les tableaux extraits du PDF"):
+                if not tables:
+                    st.write("Aucun tableau extrait.")
+                else:
+                    for item in tables[:15]:
+                        st.markdown(f"**Page {item['page']} — Tableau {item['table_id']}**")
+                        st.dataframe(make_unique_columns(item["data"]), use_container_width=True)
+
+            with st.expander("Voir le texte extrait du PDF"):
+                full_text = "\n\n".join(
+                    [f"--- Page {p['page']} ---\n{p['text']}" for p in pages_text]
+                )
+                st.text_area("Texte extrait", value=full_text[:50000], height=420)
+
+            article_iv_prompt_text = build_article_iv_prompt(
+                selected_name,
+                mentions_df,
+                numeric_df,
+                table_scores_df
+            )
+
+            st.markdown("### Prompt IA — Article IV")
+            st.text_area(
+                "Prompt Article IV généré",
+                value=article_iv_prompt_text,
+                height=360,
+                help="Copiez ce prompt dans une IA pour obtenir une extraction structurée du rapport FMI."
+            )
 
     # ══════════════════════════════════════
     # Prompt IA
@@ -530,261 +1333,40 @@ if st.button("Récupérer les données →"):
     st.markdown('<div class="section-subtitle">Collez ce texte dans Claude, ChatGPT ou tout autre outil IA pour obtenir une analyse structurée en 3 blocs.</div>', unsafe_allow_html=True)
 
     all_sections_prompt = {
-        "En-tête": section_header,
-        "Gouvernance WGI": section_governance,
-        "Marché du travail": section_labour,
-        "Pauvreté et inégalités": section_poverty,
-        "Éducation": section_education,
+        "Pilier 1 — Environnement politique et socioéconomique": pillar_sociopo,
+        "Pilier 2 — Modèle économique et régime de croissance": pillar_growth,
         "Climat et environnement": section_climate,
     }
 
     prompt_text = build_ai_prompt(selected_name, all_sections_prompt)
+
+    if article_iv_prompt_text:
+        prompt_text = (
+            prompt_text
+            + "\n\n"
+            + "=" * 52
+            + "\n"
+            + "COMPLÉMENT ARTICLE IV FMI\n"
+            + "=" * 52
+            + "\n\n"
+            + article_iv_prompt_text
+        )
+
     st.text_area("Prompt généré", value=prompt_text, height=420,
                  help="Sélectionnez tout (Ctrl+A) puis copiez (Ctrl+C)")
 
+    growth_prompt_text = build_model_growth_prompt(
+        selected_name,
+        pillar_growth,
+        article_iv_prompt_text
+    )
+
+    st.markdown("### Prompt spécialisé — Modèle économique et régime de croissance")
+    st.text_area(
+        "Prompt croissance généré",
+        value=growth_prompt_text,
+        height=520,
+        help="Prompt dédié pour rédiger précisément la section « Modèle économique et régime de croissance »."
+    )
+
     st.markdown(f'<p class="source-note">📅 Données collectées le {datetime.now().strftime("%d/%m/%Y à %H:%M")} — Toutes les valeurs proviennent de sources officielles vérifiables.</p>', unsafe_allow_html=True)
-
-
-# ═══════════════════════════════════════════════════════════════
-# SECTION ARTICLE IV FMI — Upload et extraction mécanique
-# ═══════════════════════════════════════════════════════════════
-
-st.markdown("---")
-st.markdown('<div class="section-title">📄 Article IV FMI — Extraction automatique</div>', unsafe_allow_html=True)
-st.markdown(
-    '<div class="section-subtitle">Uploadez un Article IV du FMI pour extraire automatiquement les indicateurs clés. '
-    'Note : l\'extraction mécanique fonctionne bien sur les tableaux "Selected Economic Indicators" standard. '
-    'Si des données manquent, utilisez le prompt généré pour les extraire via IA.</div>',
-    unsafe_allow_html=True
-)
-
-uploaded_pdf = st.file_uploader("Déposer un Article IV FMI (PDF)", type=["pdf"])
-
-if uploaded_pdf is not None:
-
-    with st.spinner("Extraction du texte en cours..."):
-        try:
-            import pdfplumber, io
-
-            pdf_bytes = uploaded_pdf.read()
-            full_text = ""
-            with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-                for page in pdf.pages:
-                    t = page.extract_text()
-                    if t:
-                        full_text += t + "\n"
-
-        except Exception as e:
-            st.markdown(f'<div class="error-box">⚠ Erreur lecture PDF : {e}</div>', unsafe_allow_html=True)
-            full_text = ""
-
-    if full_text:
-
-        # ── Extraction des indicateurs ──────────────────────────────
-        import re
-
-        def find_pct(pattern, text, flags=re.IGNORECASE):
-            """Cherche un pattern et retourne (valeur, contexte)."""
-            m = re.search(pattern, text, flags)
-            return m.group(1).strip() if m else None
-
-        # Pays / titre
-        country_match = re.search(
-            r"([\w\s\-]+?)\s*\n?(?:STAFF REPORT|Article IV|ARTICLE IV)",
-            full_text[:3000], re.IGNORECASE
-        )
-        doc_country = country_match.group(1).strip() if country_match else "Pays non identifié"
-
-        # Année de consultation
-        year_match = re.search(r"(20\d{2})\s+ARTICLE IV", full_text[:3000], re.IGNORECASE)
-        doc_year = year_match.group(1) if year_match else "—"
-
-        # Croissance PIB réel
-        gdp_growth = find_pct(
-            r"[Rr]eal\s+(?:Non-?oil\s+)?GDP[^:]*?(?:growth|grew)[^\d]*([\-\d\.]+)\s*percent",
-            full_text[:8000]
-        )
-        if not gdp_growth:
-            gdp_growth = find_pct(
-                r"growth[^.]*?rose to ([\d\.]+)\s*percent",
-                full_text[:8000]
-            )
-
-        # Croissance projetée
-        gdp_proj = find_pct(
-            r"[Gg]rowth is (?:projected|expected)[^.]*?([\d\.]+)\s*percent",
-            full_text[:8000]
-        )
-
-        # Inflation
-        inflation = find_pct(
-            r"[Ii]nflation[^.]*?(?:declined|fell|rose|increased)[^.]*?([\-\d\.]+)\s*percent\s+in\s+(?:20\d{2})",
-            full_text[:8000]
-        )
-        if not inflation:
-            inflation = find_pct(
-                r"CPI[^.]*?(?:annual average)[^\d]*([\d\.]+)",
-                full_text[:8000]
-            )
-
-        # Solde budgétaire / Déficit
-        fiscal_def = find_pct(
-            r"fiscal deficit[^.]*?([\d\.]+)\s*percent of",
-            full_text[:10000], re.IGNORECASE
-        )
-        if not fiscal_def:
-            fiscal_def = find_pct(
-                r"[Nn]et lending/borrowing[^\d\-]*([\-\d\.]+)",
-                full_text[:10000]
-            )
-
-        # Dette publique / PIB
-        pub_debt = find_pct(
-            r"[Pp]ublic debt[^.]*?([\d\.]+)\s*percent(?:\s+of\s+(?:GDP|non-oil))?",
-            full_text[:10000]
-        )
-
-        # Compte courant
-        current_account = find_pct(
-            r"current account[^.]*?(?:deficit|balance)[^.]*?([\-\d\.]+)\s*percent of",
-            full_text[:10000], re.IGNORECASE
-        )
-
-        # Inflation projetée
-        inflation_proj = find_pct(
-            r"[Ii]nflation is (?:expected|projected)[^.]*?([\d\.]+)\s*percent",
-            full_text[:8000]
-        )
-
-        # Recommandations principales (cherche le Staff Appraisal)
-        appraisal_match = re.search(
-            r"STAFF APPRAISAL\s*([\s\S]{200,1000}?)(?:\n\n|\Z)",
-            full_text, re.IGNORECASE
-        )
-        appraisal_text = appraisal_match.group(1).strip()[:500] if appraisal_match else None
-
-        # ── Affichage des résultats ──────────────────────────────────
-        st.markdown(
-            f'<div class="section-subtitle">📋 Document identifié : <strong>{doc_country}</strong> — Consultation {doc_year}</div>',
-            unsafe_allow_html=True
-        )
-
-        DISPLAY_COLS = ["Indicateur", "Valeur", "Unité", "Année", "Source", "Note"]
-
-        rows_imf = []
-
-        def add_row(label, val, unit="", year=doc_year, note=""):
-            rows_imf.append({
-                "Indicateur": label,
-                "Valeur": val if val else "Non extrait",
-                "Unité": unit,
-                "Année": year,
-                "Source": f"FMI Article IV {doc_year}",
-                "Note": note if val else "Pattern non trouvé — vérifier manuellement"
-            })
-
-        add_row("Croissance PIB réel (estimé)", gdp_growth, "%")
-        add_row("Croissance PIB réel (projeté)", gdp_proj, "%")
-        add_row("Inflation (moyenne annuelle)", inflation, "%")
-        add_row("Inflation (projetée)", inflation_proj, "%")
-        add_row("Déficit budgétaire", fiscal_def, "% PIB")
-        add_row("Dette publique", pub_debt, "% PIB")
-        add_row("Solde compte courant", current_account, "% PIB")
-
-        import pandas as pd
-        df_imf = pd.DataFrame(rows_imf)[DISPLAY_COLS]
-        st.dataframe(df_imf, use_container_width=True, hide_index=True)
-
-        # ── Qualité d'extraction ──────────────────────────────────────
-        extracted_count = sum(1 for r in rows_imf if r["Valeur"] != "Non extrait")
-        total_count = len(rows_imf)
-        pct = int(extracted_count / total_count * 100)
-
-        if pct >= 70:
-            quality_color = "#1f8f55"
-            quality_label = f"✓ Bonne extraction ({extracted_count}/{total_count} indicateurs)"
-        elif pct >= 40:
-            quality_color = "#b26a00"
-            quality_label = f"⚠ Extraction partielle ({extracted_count}/{total_count} indicateurs)"
-        else:
-            quality_color = "#c0392b"
-            quality_label = f"✗ Extraction faible ({extracted_count}/{total_count} — recommandé : utiliser le prompt IA)"
-
-        st.markdown(
-            f'<p style="color:{quality_color};font-size:12px;margin-top:4px">{quality_label}</p>',
-            unsafe_allow_html=True
-        )
-
-        # ── Recommandations du Staff ──────────────────────────────────
-        if appraisal_text:
-            with st.expander("📝 Extrait du Staff Appraisal"):
-                st.markdown(
-                    f'<p style="font-size:12px;color:#555;font-style:italic;line-height:1.6">{appraisal_text}...</p>',
-                    unsafe_allow_html=True
-                )
-
-        # ── Prompt IA pour Article IV ──────────────────────────────────
-        st.markdown("---")
-        st.markdown(
-            '<div class="section-subtitle">🤖 Prompt IA — Article IV complet</div>',
-            unsafe_allow_html=True
-        )
-
-        # Tronquer le texte pour le prompt (les modèles IA ont une limite)
-        text_for_prompt = full_text[:15000]
-        nb_chars = len(full_text)
-        nb_pages_est = nb_chars // 2000
-
-        prompt_imf = f"""ARTICLE IV FMI — {doc_country} ({doc_year})
-{'=' * 52}
-
-[Texte extrait automatiquement — {nb_chars} caractères, ~{nb_pages_est} pages]
-
-{text_for_prompt}
-
-{'...[texte tronqué]' if len(full_text) > 15000 else ''}
-
-{'=' * 52}
-INSTRUCTIONS POUR L'IA :
-
-À partir de ce texte d'Article IV du FMI, extrais et structure les informations suivantes :
-
-1. TABLEAU DES INDICATEURS CLÉS
-   Présente sous forme de tableau : Indicateur | Valeur | Année | Note
-   Indicateurs à extraire :
-   - Croissance du PIB réel (historique + projections)
-   - Inflation (historique + projections)
-   - Solde budgétaire / Déficit (% PIB)
-   - Dette publique (% PIB)
-   - Compte courant (% PIB)
-   - Réserves de change (si mentionné)
-   - Taux de chômage (si mentionné)
-
-2. RÉSUMÉ EXÉCUTIF (150 mots max)
-   Contexte macroéconomique, dynamiques principales, risques identifiés.
-
-3. RECOMMANDATIONS CLÉS DU FMI
-   Liste les 3-5 recommandations principales issues du Staff Appraisal.
-
-4. POINTS D'ATTENTION
-   - Données manquantes ou incertaines dans le document
-   - Risques signalés explicitement par le staff
-   - Écarts entre les prévisions et les réalisations
-
-RÈGLES :
-- Ne pas inventer de chiffres absents du texte
-- Indiquer clairement si une valeur est une estimation ou une projection
-- Citer la page ou la section source si possible"""
-
-        st.text_area(
-            "Prompt Article IV généré",
-            value=prompt_imf,
-            height=350,
-            help="Sélectionnez tout (Ctrl+A) puis copiez (Ctrl+C)"
-        )
-
-        st.markdown(
-            f'<p class="source-note">📄 PDF analysé : {uploaded_pdf.name} — '
-            f'{nb_chars:,} caractères extraits sur ~{nb_pages_est} pages estimées</p>',
-            unsafe_allow_html=True
-        )
