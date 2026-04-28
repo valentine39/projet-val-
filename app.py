@@ -1,91 +1,129 @@
 import streamlit as st
-import pdfplumber
-import pandas as pd
 import requests
+from bs4 import BeautifulSoup
 import re
-import plotly.express as px
+import pandas as pd
+from datetime import datetime
+from io import BytesIO
+import pdfplumber  # Indispensable pour le Pilier 2
 
-# --- CONFIGURATION & STYLE ---
-st.set_page_config(page_title="Expert Pays - Pilier 1 & 2", layout="wide")
-st.markdown("""<style> .stMetric { background-color: #f8f9fa; padding: 10px; border-radius: 10px; } </style>""", unsafe_allow_html=True)
+# --- CONFIGURATION (Gardée de ton code) ---
+st.set_page_config(page_title="Outil de collecte - DER Expert", layout="wide")
 
-# --- FONCTIONS DE COLLECTE (PILIER 1) ---
-def get_world_bank_data(country_code):
-    indicators = {
-        'NY.GDP.PCAP.CD': 'PIB/hab (USD)',
-        'SI.POV.GINI': 'Indice Gini',
-        'NY.GDP.MKTP.KD.ZG': 'Croissance PIB (%)'
-    }
-    data = {}
-    for code, name in indicators.items():
-        try:
-            url = f"https://api.worldbank.org/v2/country/{country_code}/indicator/{code}?format=json&per_page=1"
-            res = requests.get(url).json()
-            data[name] = res[1][0]['value'], res[1][0]['date']
-        except: data[name] = ("N/A", "N/A")
-    return data
+# --- FONCTIONS DE SCRAPING (Optimisées) ---
 
-# --- FONCTION D'EXTRACTION PDF (PILIER 2 - ZERO CONFIG) ---
-def extract_imf_table(file):
-    with pdfplumber.open(file) as pdf:
-        for page in pdf.pages[:15]: # Scan auto des 15 premières pages
-            text = page.extract_text()
-            if text and "Selected Economic" in text:
-                table = page.extract_table({"vertical_strategy": "text", "horizontal_strategy": "text", "text_x_tolerance": 3})
-                if table:
-                    df = pd.DataFrame(table)
-                    # Nettoyage automatique des "None" et suture des titres
-                    df = df.replace(['None', '—', '...', ''], np.nan).dropna(how='all', axis=1)
-                    return df
-    return None
+def fetch_wb_indicator(country_code, indicator):
+    """Récupère la valeur la plus récente d'un indicateur Banque Mondiale"""
+    url = f"https://api.worldbank.org/v2/country/{country_code}/indicator/{indicator}?format=json&mrnev=1"
+    try:
+        r = requests.get(url, timeout=10).json()
+        if len(r) > 1:
+            val = r[1][0]['value']
+            year = r[1][0]['date']
+            return val, year
+    except: return None, None
 
-# --- INTERFACE ---
-st.title("🌍 Générateur de Fiche Pays (Piliers 1 & 2)")
-col_a, col_b = st.columns(2)
+def extract_fmi_indicators(uploaded_file):
+    """
+    EXTRACTEUR CIBLÉ PILIER 2: 
+    Cherche le tableau 'Selected Economic Indicators' dans le PDF FMI.
+    """
+    try:
+        with pdfplumber.open(uploaded_file) as pdf:
+            # On cherche sur les 10 premières pages
+            for page in pdf.pages[:10]:
+                text = page.extract_text()
+                if text and "Selected Economic" in text:
+                    table = page.extract_table()
+                    if table:
+                        df = pd.DataFrame(table)
+                        # Nettoyage : suppression des lignes vides et formatage
+                        df = df.dropna(how='all').iloc[:, :6] # On prend les 6 premières colonnes (Années)
+                        return df.to_string()
+        return "Tableau FMI non détecté automatiquement."
+    except Exception as e:
+        return f"Erreur PDF: {str(e)}"
 
-with col_a:
-    country_name = st.text_input("Nom du pays (ex: Azerbaijan, Argentina)", "Azerbaijan")
-    country_iso = st.text_input("Code ISO (2 lettres - ex: AZ, AR)", "AZ")
+# --- LOGIQUE MÉTIER : STRUCTURATION DES PILIERS ---
 
-with col_b:
-    pdf_file = st.file_uploader("Déposer le rapport Article IV (PDF)", type="pdf")
+def generate_expert_prompt(country_name, data_p1, data_p2):
+    """Génère le prompt final basé sur tes consignes du 23/04"""
+    prompt = f"""
+    Rédige une fiche pays professionnelle pour : {country_name}.
+    Structure ton analyse selon les deux piliers suivants, en restant dense, factuel et institutionnel.
+    
+    ### DONNÉES SOURCES (BRUTES) :
+    PILIER 1: {data_p1}
+    PILIER 2 (EXTRAITS FMI): {data_p2}
+    
+    ### INSTRUCTIONS DE RÉDACTION :
+    
+    PILIER 1 : Environnement politique et socioéconomique
+    - §1: Analyse de la stabilité politique et du régime (utilise les scores Freedom House).
+    - §2: Analyse quantitative (Gouvernance Banque Mondiale).
+    - §3: Développement humain (PIB/hab, Gini, IDH). Mentionne les millésimes de données.
+    
+    PILIER 2 : Modèle économique et régime de croissance
+    - Partie 'Modèle économique': Caractérise la structure productive (diversifiée, rentière, etc.). Identifie forces et fragilités.
+    - Partie 'Régime de croissance': Analyse le rythme (volatilité, moteurs) et les perspectives à moyen terme. 
+    - Contrainte : Pas de bullet points. Style analytique. Rattache chaque affirmation à un chiffre.
+    """
+    return prompt
 
-if st.button("Lancer l'analyse complète"):
-    # 1. RÉCUPÉRATION PILIER 1
-    st.subheader("📊 Pilier 1 : Données Socio-économiques (API)")
-    wb_data = get_world_bank_data(country_iso)
-    c1, c2, c3 = st.columns(3)
-    c1.metric("PIB/hab", f"{wb_data['PIB/hab (USD)'][0]} $", f"Année: {wb_data['PIB/hab (USD)'][1]}")
-    c2.metric("Gini", wb_data['Indice Gini'][0], f"Année: {wb_data['Indice Gini'][1]}")
-    c3.metric("Croissance", f"{wb_data['Croissance PIB (%)'][0]} %")
+# --- INTERFACE STREAMLIT ---
 
-    # 2. RÉCUPÉRATION PILIER 2
-    st.subheader("🏗️ Pilier 2 : Modèle de croissance (PDF)")
-    if pdf_file:
-        df_imf = extract_imf_table(pdf_file)
-        if df_imf is not None:
-            st.success("Tableau FMI détecté et structuré.")
-            st.dataframe(df_imf.head(10), use_container_width=True)
-            
-            # --- GÉNÉRATION DU PROMPT FINAL ---
-            st.divider()
-            st.subheader("📝 Prompt IA pour la Fiche Pays")
-            
-            prompt = f"""
-            Tu es un expert en analyse macroéconomique. Rédige une analyse pour : {country_name}.
-            
-            DONNÉES DISPONIBLES :
-            - PIB/hab : {wb_data['PIB/hab (USD)'][0]} (Source: BM)
-            - Gini : {wb_data['Indice Gini'][0]}
-            - Extraits FMI : {df_imf.iloc[:10, :5].to_string()}
-            
-            CONSIGNES :
-            1. Rédige le Pilier 1 (Environnement politique) en 3 paragraphes : Politique brute, Analyse Gouvernance (V-Dem/BM), et Socio-éco.
-            2. Rédige le Pilier 2 (Modèle de croissance) avec deux sections explicites : "Modèle économique :" et "Régime de croissance :". 
-            Respecte un style institutionnel, dense, sans bullet points. Rattache chaque analyse à un chiffre.
-            """
-            st.text_area("Copiez ce prompt dans votre IA :", prompt, height=300)
+st.title("🌍 DER Intelligence - Analyse Piliers 1 & 2")
+st.markdown("---")
+
+# 1. Sélection du pays
+selected_key = st.selectbox("Sélectionner un pays", list(COUNTRY_MAPPING.keys()))
+country = COUNTRY_MAPPING[selected_key]
+
+# 2. Upload PDF (Pour le Pilier 2)
+uploaded_pdf = st.file_uploader("Charger le rapport Article IV FMI (PDF)", type="pdf")
+
+if st.button("🚀 Lancer l'extraction et générer le prompt"):
+    
+    with st.spinner("Collecte des données en cours..."):
+        # Collecte Pilier 1 (API World Bank)
+        pib_pc, y1 = fetch_wb_indicator(country['world_bank_code'], "NY.GDP.PCAP.CD")
+        gini, y2 = fetch_wb_indicator(country['world_bank_code'], "SI.POV.GINI")
+        growth, y3 = fetch_wb_indicator(country['world_bank_code'], "NY.GDP.MKTP.KD.ZG")
+        
+        # Collecte Freedom House (Scraping)
+        fh = fetch_freedom_house(country['freedom_house_slug'])
+        
+        # Collecte Pilier 2 (PDF FMI)
+        fmi_context = ""
+        if uploaded_pdf:
+            fmi_context = extract_fmi_indicators(uploaded_pdf)
         else:
-            st.warning("Tableau FMI non trouvé. Vérifiez que le PDF est bien un rapport Article IV.")
-    else:
-        st.info("Veuillez charger un PDF pour compléter le Pilier 2.")
+            fmi_context = "Aucun PDF fourni. Utilise tes connaissances générales pour le Pilier 2."
+
+        # Préparation du bloc de données Pilier 1 pour l'IA
+        p1_summary = {
+            "PIB/hab": f"{pib_pc} ({y1})",
+            "Gini": f"{gini} ({y2})",
+            "Croissance": f"{growth}% ({y3})",
+            "Status Politique": fh.get('status', 'N/D'),
+            "Score FH": fh.get('score', 'N/D')
+        }
+
+        # Affichage des résultats bruts
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Données Pilier 1 (Vérifiées)")
+            st.json(p1_summary)
+        
+        with col2:
+            st.subheader("Données Pilier 2 (Extraites PDF)")
+            if uploaded_pdf:
+                st.text_area("Extrait du tableau FMI", fmi_context, height=200)
+            else:
+                st.warning("Manque PDF FMI pour une analyse précise du Pilier 2.")
+
+        # GÉNÉRATION DU PROMPT
+        st.markdown("---")
+        st.header("📝 Prompt Expert Généré")
+        final_prompt = generate_expert_prompt(country['name'], p1_summary, fmi_context)
+        st.text_area("Copiez ce texte dans ChatGPT / Claude :", final_prompt, height=400)
