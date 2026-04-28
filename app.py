@@ -243,6 +243,7 @@ uploaded_article_iv = st.file_uploader(
     help="L'app extraira automatiquement le tableau 'Selected Economic Indicators' de ce PDF."
 )
 
+
 if st.button("Lancer la collecte et générer le rapport"):
     
     with st.spinner("Collecte des données institutionnelles..."):
@@ -319,5 +320,3 @@ CONTRAINTES :
     
     st.text_area("Copiez ce texte dans Claude ou ChatGPT :", value=prompt.strip(), height=500)
     st.markdown(f'<p class="source-note">📅 Données collectées et formatées le {datetime.now().strftime("%d/%m/%Y à %H:%M")}</p>', unsafe_allow_html=True)
-        st.subheader("📝 Prompt à copier pour l'IA")
-        st.text_area("Copie ce texte dans ChatGPT ou Claude :", prompt_final, height=450)
