@@ -2,67 +2,68 @@ import streamlit as st
 import pdfplumber
 import pandas as pd
 import numpy as np
+import re
 
-st.set_page_config(page_title="IMF Precision Extractor", layout="wide")
+st.set_page_config(page_title="IMF Final Extractor", layout="wide")
 
-st.title("🎯 Extracteur FMI : Version Finale")
+def merge_text_columns(df, num_text_cols=3):
+    """Fusionne les X premières colonnes si elles contiennent du texte découpé"""
+    df = df.copy()
+    # On remplace les None par du vide pour la fusion
+    for i in range(num_text_cols):
+        df.iloc[:, i] = df.iloc[:, i].fillna("")
+    
+    # On crée la nouvelle colonne 0 en fusionnant les colonnes choisies
+    combined = df.iloc[:, 0].astype(str)
+    for i in range(1, num_text_cols):
+        combined = combined + df.iloc[:, i].astype(str)
+    
+    # On nettoie les espaces en trop
+    df.iloc[:, 0] = combined.apply(lambda x: " ".join(x.split()))
+    
+    # On supprime les colonnes qui ont été fusionnées
+    cols_to_drop = [df.columns[i] for i in range(1, num_text_cols)]
+    df = df.drop(columns=cols_to_drop)
+    return df
+
+st.title("📊 Extracteur FMI (Correction des Libellés)")
 
 uploaded_file = st.file_uploader("Charger le PDF", type="pdf")
 
-# Réglages dans la barre latérale
-st.sidebar.header("Réglages de précision")
-# On baisse les valeurs par défaut car ton CSV montrait des colonnes fusionnées
-x_tol = st.sidebar.slider("Finesse des colonnes (x_tol)", 1, 10, 2)
-y_tol = st.sidebar.slider("Finesse des lignes (y_tol)", 1, 10, 3)
-page_to_extract = st.sidebar.number_input("Page du PDF", min_value=1, value=5)
+with st.sidebar:
+    st.header("1. Réglages PDF")
+    page_num = st.number_input("Page", min_value=1, value=5)
+    x_tol = st.slider("Précision colonnes (x_tol)", 1, 10, 3)
+    
+    st.header("2. Correction Libellés")
+    nb_cols_merge = st.number_input("Nb de colonnes à fusionner à gauche", min_value=1, max_value=5, value=3)
+    st.info("Si 'Consumer' et 'Price' sont dans 2 colonnes différentes, augmentez ce chiffre.")
 
 if uploaded_file:
     with pdfplumber.open(uploaded_file) as pdf:
-        if page_to_extract > len(pdf.pages):
-            st.error("Cette page n'existe pas dans le document.")
-        else:
-            page = pdf.pages[page_to_extract - 1]
+        page = pdf.pages[page_num - 1]
+        
+        table_settings = {
+            "vertical_strategy": "text",
+            "horizontal_strategy": "text",
+            "text_x_tolerance": x_tol,
+            "text_y_tolerance": 3,
+        }
+        
+        table = page.extract_table(table_settings)
+        
+        if table:
+            df = pd.DataFrame(table)
             
-            # Paramètres CORRIGÉS pour éviter le TypeError
-            table_settings = {
-                "vertical_strategy": "text",
-                "horizontal_strategy": "text",
-                "text_x_tolerance": x_tol, # Le nom exact est text_x_tolerance
-                "text_y_tolerance": y_tol, # Le nom exact est text_y_tolerance
-            }
+            # Application de la soudure des colonnes
+            df = merge_text_columns(df, num_text_cols=nb_cols_merge)
             
-            with st.spinner('Extraction en cours...'):
-                table = page.extract_table(table_settings)
-                
-                if table:
-                    df = pd.DataFrame(table)
-                    
-                    # Nettoyage des lignes vides
-                    df = df.dropna(how='all')
-                    
-                    st.subheader(f"Résultat de la Page {page_to_extract}")
-                    
-                    # Option pour nettoyer les espaces doubles (fréquent au FMI)
-                    if st.checkbox("Nettoyer les cellules (supprimer espaces inutiles)", value=True):
-                        df = df.applymap(lambda x: " ".join(x.split()) if isinstance(x, str) else x)
+            # Nettoyage des lignes vides
+            df = df.replace(['', 'None', None], np.nan).dropna(how='all')
 
-                    st.dataframe(df, use_container_width=True)
+            st.subheader("Visualisation du tableau corrigé")
+            st.dataframe(df, use_container_width=True)
 
-                    # Exportation
-                    csv = df.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label="📥 Télécharger ce tableau (CSV)",
-                        data=csv,
-                        file_name=f"IMF_Page_{page_to_extract}.csv",
-                        mime='text/csv'
-                    )
-                else:
-                    st.warning("Aucun tableau détecté. Essayez de DIMINUER la valeur de 'Finesse des colonnes'.")
-
-st.markdown("""
----
-### 💡 Comment obtenir un résultat parfait ?
-1. **Si les chiffres sont collés dans une seule colonne :** Baissez `x_tol` à **1** ou **2**.
-2. **Si une phrase est coupée en deux colonnes :** Augmentez légèrement `x_tol`.
-3. **Si le tableau est vide :** C'est que les réglages sont trop stricts pour ce PDF.
-""")
+            # Export
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Télécharger CSV Corrigé", csv, "fmi_total_clean.csv")
