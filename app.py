@@ -23,101 +23,309 @@ OLD_DATA_THRESHOLD = 5
 # ─────────────────────────────────────────────
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap');
 
-    html, body, [class*="css"] {
-        font-family: "Open Sans", Arial, sans-serif;
-        color: #1a1a1a;
-    }
-    .stApp { background-color: #ffffff; }
-    .main .block-container { padding-top: 1rem; padding-bottom: 2rem; max-width: 1200px; }
-    h1, h2, h3 { font-family: "Open Sans", Arial, sans-serif; color: #003189; }
+html, body, [class*="css"] {
+    font-family: "Open Sans", Arial, sans-serif;
+    color: #1a1a1a;
+}
+.stApp { background-color: #f4f6fb; }
+.main .block-container { padding-top: 1rem; padding-bottom: 2rem; max-width: 1300px; }
+h1, h2, h3 { font-family: "Open Sans", Arial, sans-serif; color: #003189; }
 
-    .afd-header {
-        background-color: #003189;
-        padding: 18px 24px;
-        border-radius: 6px;
-        margin-bottom: 24px;
-    }
-    .afd-header h1 {
-        color: #ffffff !important;
-        font-size: 22px;
-        margin: 0;
-        font-weight: 700;
-    }
-    .afd-header p {
-        color: #ccd6f0;
-        font-size: 12px;
-        margin: 4px 0 0 0;
-    }
+/* HEADER */
+.afd-header {
+    background: linear-gradient(135deg, #003189 0%, #0047c8 100%);
+    padding: 22px 28px;
+    border-radius: 10px;
+    margin-bottom: 28px;
+    box-shadow: 0 4px 15px rgba(0,49,137,0.25);
+}
+.afd-header h1 {
+    color: #ffffff !important;
+    font-size: 24px;
+    margin: 0;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+}
+.afd-header p {
+    color: #a8c0f0;
+    font-size: 13px;
+    margin: 6px 0 0 0;
+}
 
-    .pillar-title {
-        font-size: 16px;
-        font-weight: 700;
-        color: #ffffff;
-        background-color: #003189;
-        padding: 10px 16px;
-        border-radius: 4px;
-        margin: 28px 0 4px 0;
-    }
-    .pillar-subtitle {
-        font-size: 11px;
-        color: #666666;
-        margin-bottom: 10px;
-        padding-left: 4px;
-    }
+/* SECTION HEADERS */
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(90deg, #003189 0%, #0a3fa8 100%);
+    padding: 12px 18px;
+    border-radius: 8px;
+    margin: 24px 0 6px 0;
+    box-shadow: 0 2px 8px rgba(0,49,137,0.2);
+}
+.section-header h3 {
+    color: #ffffff !important;
+    font-size: 15px;
+    margin: 0;
+    font-weight: 700;
+}
+.section-subtitle {
+    font-size: 11px;
+    color: #777;
+    margin-bottom: 12px;
+    padding-left: 4px;
+    font-style: italic;
+}
 
-    .prompt-title {
-        font-size: 13px;
-        font-weight: 700;
-        color: #E3001B;
-        border-left: 4px solid #E3001B;
-        padding-left: 10px;
-        margin: 20px 0 6px 0;
-    }
+/* THEMATIC GROUP CARDS */
+.theme-card {
+    background: white;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    border-left: 5px solid #003189;
+    transition: box-shadow 0.2s;
+}
+.theme-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+.theme-card-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 12px;
+    color: #003189;
+}
 
-    .source-note {
-        font-size: 11px;
-        color: #888888;
-        margin-top: 4px;
-    }
-    .warn-missing {
-        color: #999999;
-        font-size: 11px;
-        font-style: italic;
-    }
+/* INDICATOR ROWS */
+.indicator-row {
+    display: flex;
+    align-items: center;
+    padding: 7px 10px;
+    border-radius: 6px;
+    margin-bottom: 5px;
+    background: #f8f9fd;
+    transition: background 0.15s;
+}
+.indicator-row:hover { background: #eef1fa; }
+.indicator-label {
+    flex: 1;
+    font-size: 12.5px;
+    color: #333;
+    font-weight: 400;
+}
+.indicator-value {
+    font-size: 13px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 20px;
+    min-width: 90px;
+    text-align: center;
+    margin: 0 8px;
+}
+.indicator-meta {
+    font-size: 10.5px;
+    color: #999;
+    min-width: 80px;
+    text-align: right;
+}
+.indicator-source {
+    font-size: 10px;
+    color: #aaa;
+    text-align: right;
+    min-width: 120px;
+    padding-left: 8px;
+}
+.indicator-note {
+    font-size: 10px;
+    color: #e07c00;
+    font-style: italic;
+    margin-left: 6px;
+}
 
-    div[data-testid="stButton"] button {
-        background: #003189;
-        color: white;
-        font-family: "Open Sans", Arial, sans-serif;
-        font-weight: 700;
-        font-size: 13px;
-        border: none;
-        border-radius: 6px;
-        padding: 10px 24px;
-        width: 100%;
-        transition: background 0.2s;
-    }
-    div[data-testid="stButton"] button:hover {
-        background: #E3001B;
-    }
+/* COLOR BADGES */
+.badge-green {
+    background: #d4f0e0;
+    color: #1a7a45;
+    border: 1px solid #a8dfc0;
+}
+.badge-lightgreen {
+    background: #e6f7ee;
+    color: #2e8b57;
+    border: 1px solid #b8e6cc;
+}
+.badge-orange {
+    background: #fff3e0;
+    color: #c17000;
+    border: 1px solid #ffd180;
+}
+.badge-red {
+    background: #fde8e8;
+    color: #c0392b;
+    border: 1px solid #f5b7b1;
+}
+.badge-grey {
+    background: #f0f0f0;
+    color: #888;
+    border: 1px solid #ddd;
+}
+.badge-blue {
+    background: #e8eeff;
+    color: #003189;
+    border: 1px solid #b8c8f5;
+}
+.badge-purple {
+    background: #f0e8ff;
+    color: #6b21a8;
+    border: 1px solid #d8b4fe;
+}
 
-    div[data-testid="stSelectbox"] label {
-        color: #003189;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-    }
+/* LEGEND */
+.legend-bar {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin: 6px 0 18px 0;
+    padding: 10px 14px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: #555;
+}
+.legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
 
-    .footer-note {
-        font-size: 11px;
-        color: #aaaaaa;
-        margin-top: 32px;
-        border-top: 1px solid #eeeeee;
-        padding-top: 8px;
-    }
+/* PROMPT */
+.prompt-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #E3001B;
+    border-left: 4px solid #E3001B;
+    padding-left: 10px;
+    margin: 20px 0 6px 0;
+}
+
+/* SUMMARY METRICS */
+.summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin: 16px 0;
+}
+.summary-card {
+    background: white;
+    border-radius: 8px;
+    padding: 14px 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    text-align: center;
+    border-top: 3px solid #003189;
+}
+.summary-card .s-label {
+    font-size: 10.5px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+}
+.summary-card .s-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #003189;
+}
+.summary-card .s-sub {
+    font-size: 10px;
+    color: #aaa;
+    margin-top: 2px;
+}
+
+/* BUTTONS */
+div[data-testid="stButton"] button {
+    background: linear-gradient(135deg, #003189 0%, #0047c8 100%);
+    color: white;
+    font-family: "Open Sans", Arial, sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 28px;
+    width: 100%;
+    transition: all 0.2s;
+    box-shadow: 0 3px 12px rgba(0,49,137,0.3);
+}
+div[data-testid="stButton"] button:hover {
+    background: linear-gradient(135deg, #E3001B 0%, #ff2020 100%);
+    box-shadow: 0 4px 16px rgba(227,0,27,0.35);
+    transform: translateY(-1px);
+}
+
+div[data-testid="stSelectbox"] label {
+    color: #003189;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+/* EXPANDER */
+.streamlit-expanderHeader {
+    background: #f0f4ff !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+    color: #003189 !important;
+}
+
+/* TABS */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 4px;
+    background: white;
+    padding: 6px;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+}
+.stTabs [data-baseweb="tab"] {
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 12.5px;
+    font-weight: 600;
+}
+.stTabs [aria-selected="true"] {
+    background-color: #003189 !important;
+    color: white !important;
+}
+
+.footer-note {
+    font-size: 11px;
+    color: #aaa;
+    margin-top: 32px;
+    border-top: 1px solid #e8e8e8;
+    padding-top: 10px;
+    text-align: center;
+}
+
+/* WARN */
+.warn-missing {
+    color: #999;
+    font-size: 11px;
+    font-style: italic;
+}
+.source-note {
+    font-size: 11px;
+    color: #888;
+    margin-top: 4px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -130,121 +338,52 @@ COUNTRY_MAPPING = {
     "albanie": {"name": "Albanie", "freedom_house_slug": "albania", "world_bank_code": "ALB", "wb_url_code": "AL", "undp_code": "ALB"},
     "algerie": {"name": "Algérie", "freedom_house_slug": "algeria", "world_bank_code": "DZA", "wb_url_code": "DZ", "undp_code": "DZA"},
     "angola": {"name": "Angola", "freedom_house_slug": "angola", "world_bank_code": "AGO", "wb_url_code": "AO", "undp_code": "AGO"},
-    "antigua_et_barbuda": {"name": "Antigua et Barbuda", "freedom_house_slug": "antigua-and-barbuda", "world_bank_code": "ATG", "wb_url_code": "AG", "undp_code": "ATG"},
     "argentine": {"name": "Argentine", "freedom_house_slug": "argentina", "world_bank_code": "ARG", "wb_url_code": "AR", "undp_code": "ARG"},
     "armenie": {"name": "Arménie", "freedom_house_slug": "armenia", "world_bank_code": "ARM", "wb_url_code": "AM", "undp_code": "ARM"},
     "azerbaijan": {"name": "Azerbaïdjan", "freedom_house_slug": "azerbaijan", "world_bank_code": "AZE", "wb_url_code": "AZ", "undp_code": "AZE"},
     "bangladesh": {"name": "Bangladesh", "freedom_house_slug": "bangladesh", "world_bank_code": "BGD", "wb_url_code": "BD", "undp_code": "BGD"},
-    "belize": {"name": "Belize", "freedom_house_slug": "belize", "world_bank_code": "BLZ", "wb_url_code": "BZ", "undp_code": "BLZ"},
     "benin": {"name": "Bénin", "freedom_house_slug": "benin", "world_bank_code": "BEN", "wb_url_code": "BJ", "undp_code": "BEN"},
-    "bhoutan": {"name": "Bhoutan", "freedom_house_slug": "bhutan", "world_bank_code": "BTN", "wb_url_code": "BT", "undp_code": "BTN"},
-    "bielorussie": {"name": "Biélorussie", "freedom_house_slug": "belarus", "world_bank_code": "BLR", "wb_url_code": "BY", "undp_code": "BLR"},
-    "birmanie": {"name": "Birmanie (Myanmar)", "freedom_house_slug": "myanmar", "world_bank_code": "MMR", "wb_url_code": "MM", "undp_code": "MMR"},
     "bolivie": {"name": "Bolivie", "freedom_house_slug": "bolivia", "world_bank_code": "BOL", "wb_url_code": "BO", "undp_code": "BOL"},
-    "bosnie_herzegovine": {"name": "Bosnie-Herzégovine", "freedom_house_slug": "bosnia-and-herzegovina", "world_bank_code": "BIH", "wb_url_code": "BA", "undp_code": "BIH"},
-    "botswana": {"name": "Botswana", "freedom_house_slug": "botswana", "world_bank_code": "BWA", "wb_url_code": "BW", "undp_code": "BWA"},
     "bresil": {"name": "Brésil", "freedom_house_slug": "brazil", "world_bank_code": "BRA", "wb_url_code": "BR", "undp_code": "BRA"},
     "burkina_faso": {"name": "Burkina Faso", "freedom_house_slug": "burkina-faso", "world_bank_code": "BFA", "wb_url_code": "BF", "undp_code": "BFA"},
     "burundi": {"name": "Burundi", "freedom_house_slug": "burundi", "world_bank_code": "BDI", "wb_url_code": "BI", "undp_code": "BDI"},
     "cambodge": {"name": "Cambodge", "freedom_house_slug": "cambodia", "world_bank_code": "KHM", "wb_url_code": "KH", "undp_code": "KHM"},
     "cameroun": {"name": "Cameroun", "freedom_house_slug": "cameroon", "world_bank_code": "CMR", "wb_url_code": "CM", "undp_code": "CMR"},
-    "cap_vert": {"name": "Cap-Vert", "freedom_house_slug": "cape-verde", "world_bank_code": "CPV", "wb_url_code": "CV", "undp_code": "CPV"},
     "chili": {"name": "Chili", "freedom_house_slug": "chile", "world_bank_code": "CHL", "wb_url_code": "CL", "undp_code": "CHL"},
     "chine": {"name": "Chine", "freedom_house_slug": "china", "world_bank_code": "CHN", "wb_url_code": "CN", "undp_code": "CHN"},
     "colombie": {"name": "Colombie", "freedom_house_slug": "colombia", "world_bank_code": "COL", "wb_url_code": "CO", "undp_code": "COL"},
-    "comores": {"name": "Comores", "freedom_house_slug": "comoros", "world_bank_code": "COM", "wb_url_code": "KM", "undp_code": "COM"},
-    "congo": {"name": "Congo (Brazzaville)", "freedom_house_slug": "republic-of-congo", "world_bank_code": "COG", "wb_url_code": "CG", "undp_code": "COG"},
-    "costa_rica": {"name": "Costa Rica", "freedom_house_slug": "costa-rica", "world_bank_code": "CRI", "wb_url_code": "CR", "undp_code": "CRI"},
     "cote_ivoire": {"name": "Côte d'Ivoire", "freedom_house_slug": "cote-divoire", "world_bank_code": "CIV", "wb_url_code": "CI", "undp_code": "CIV"},
-    "cuba": {"name": "Cuba", "freedom_house_slug": "cuba", "world_bank_code": "CUB", "wb_url_code": "CU", "undp_code": "CUB"},
-    "djibouti": {"name": "Djibouti", "freedom_house_slug": "djibouti", "world_bank_code": "DJI", "wb_url_code": "DJ", "undp_code": "DJI"},
-    "dominique": {"name": "Dominique", "freedom_house_slug": "dominica", "world_bank_code": "DMA", "wb_url_code": "DM", "undp_code": "DMA"},
     "egypte": {"name": "Égypte", "freedom_house_slug": "egypt", "world_bank_code": "EGY", "wb_url_code": "EG", "undp_code": "EGY"},
-    "equateur": {"name": "Équateur", "freedom_house_slug": "ecuador", "world_bank_code": "ECU", "wb_url_code": "EC", "undp_code": "ECU"},
-    "erythree": {"name": "Érythrée", "freedom_house_slug": "eritrea", "world_bank_code": "ERI", "wb_url_code": "ER", "undp_code": "ERI"},
-    "eswatini": {"name": "Eswatini", "freedom_house_slug": "eswatini", "world_bank_code": "SWZ", "wb_url_code": "SZ", "undp_code": "SWZ"},
     "ethiopie": {"name": "Éthiopie", "freedom_house_slug": "ethiopia", "world_bank_code": "ETH", "wb_url_code": "ET", "undp_code": "ETH"},
-    "fidji": {"name": "Fidji", "freedom_house_slug": "fiji", "world_bank_code": "FJI", "wb_url_code": "FJ", "undp_code": "FJI"},
-    "gabon": {"name": "Gabon", "freedom_house_slug": "gabon", "world_bank_code": "GAB", "wb_url_code": "GA", "undp_code": "GAB"},
-    "gambie": {"name": "Gambie", "freedom_house_slug": "gambia", "world_bank_code": "GMB", "wb_url_code": "GM", "undp_code": "GMB"},
-    "georgie": {"name": "Géorgie", "freedom_house_slug": "georgia", "world_bank_code": "GEO", "wb_url_code": "GE", "undp_code": "GEO"},
     "ghana": {"name": "Ghana", "freedom_house_slug": "ghana", "world_bank_code": "GHA", "wb_url_code": "GH", "undp_code": "GHA"},
-    "grenade": {"name": "Grenade", "freedom_house_slug": "grenada", "world_bank_code": "GRD", "wb_url_code": "GD", "undp_code": "GRD"},
-    "guatemala": {"name": "Guatemala", "freedom_house_slug": "guatemala", "world_bank_code": "GTM", "wb_url_code": "GT", "undp_code": "GTM"},
     "guinee": {"name": "Guinée", "freedom_house_slug": "guinea", "world_bank_code": "GIN", "wb_url_code": "GN", "undp_code": "GIN"},
-    "guinee_bissau": {"name": "Guinée-Bissau", "freedom_house_slug": "guinea-bissau", "world_bank_code": "GNB", "wb_url_code": "GW", "undp_code": "GNB"},
-    "guinee_equatoriale": {"name": "Guinée équatoriale", "freedom_house_slug": "equatorial-guinea", "world_bank_code": "GNQ", "wb_url_code": "GQ", "undp_code": "GNQ"},
-    "guyana": {"name": "Guyana", "freedom_house_slug": "guyana", "world_bank_code": "GUY", "wb_url_code": "GY", "undp_code": "GUY"},
     "haiti": {"name": "Haïti", "freedom_house_slug": "haiti", "world_bank_code": "HTI", "wb_url_code": "HT", "undp_code": "HTI"},
-    "honduras": {"name": "Honduras", "freedom_house_slug": "honduras", "world_bank_code": "HND", "wb_url_code": "HN", "undp_code": "HND"},
-    "iles_salomon": {"name": "Îles Salomon", "freedom_house_slug": "solomon-islands", "world_bank_code": "SLB", "wb_url_code": "SB", "undp_code": "SLB"},
     "inde": {"name": "Inde", "freedom_house_slug": "india", "world_bank_code": "IND", "wb_url_code": "IN", "undp_code": "IND"},
     "indonesie": {"name": "Indonésie", "freedom_house_slug": "indonesia", "world_bank_code": "IDN", "wb_url_code": "ID", "undp_code": "IDN"},
     "irak": {"name": "Irak", "freedom_house_slug": "iraq", "world_bank_code": "IRQ", "wb_url_code": "IQ", "undp_code": "IRQ"},
-    "jamaique": {"name": "Jamaïque", "freedom_house_slug": "jamaica", "world_bank_code": "JAM", "wb_url_code": "JM", "undp_code": "JAM"},
-    "jordanie": {"name": "Jordanie", "freedom_house_slug": "jordan", "world_bank_code": "JOR", "wb_url_code": "JO", "undp_code": "JOR"},
-    "kazakhstan": {"name": "Kazakhstan", "freedom_house_slug": "kazakhstan", "world_bank_code": "KAZ", "wb_url_code": "KZ", "undp_code": "KAZ"},
     "kenya": {"name": "Kenya", "freedom_house_slug": "kenya", "world_bank_code": "KEN", "wb_url_code": "KE", "undp_code": "KEN"},
-    "kirghizistan": {"name": "Kirghizistan", "freedom_house_slug": "kyrgyzstan", "world_bank_code": "KGZ", "wb_url_code": "KG", "undp_code": "KGZ"},
-    "kosovo": {"name": "Kosovo", "freedom_house_slug": "kosovo", "world_bank_code": "XKX", "wb_url_code": "XK", "undp_code": "XKX"},
-    "laos": {"name": "Laos", "freedom_house_slug": "laos", "world_bank_code": "LAO", "wb_url_code": "LA", "undp_code": "LAO"},
-    "lesotho": {"name": "Lesotho", "freedom_house_slug": "lesotho", "world_bank_code": "LSO", "wb_url_code": "LS", "undp_code": "LSO"},
     "liban": {"name": "Liban", "freedom_house_slug": "lebanon", "world_bank_code": "LBN", "wb_url_code": "LB", "undp_code": "LBN"},
-    "liberia": {"name": "Libéria", "freedom_house_slug": "liberia", "world_bank_code": "LBR", "wb_url_code": "LR", "undp_code": "LBR"},
-    "libye": {"name": "Libye", "freedom_house_slug": "libya", "world_bank_code": "LBY", "wb_url_code": "LY", "undp_code": "LBY"},
-    "macedoine_du_nord": {"name": "Macédoine du Nord", "freedom_house_slug": "north-macedonia", "world_bank_code": "MKD", "wb_url_code": "MK", "undp_code": "MKD"},
     "madagascar": {"name": "Madagascar", "freedom_house_slug": "madagascar", "world_bank_code": "MDG", "wb_url_code": "MG", "undp_code": "MDG"},
-    "malawi": {"name": "Malawi", "freedom_house_slug": "malawi", "world_bank_code": "MWI", "wb_url_code": "MW", "undp_code": "MWI"},
-    "maldives": {"name": "Maldives", "freedom_house_slug": "maldives", "world_bank_code": "MDV", "wb_url_code": "MV", "undp_code": "MDV"},
     "mali": {"name": "Mali", "freedom_house_slug": "mali", "world_bank_code": "MLI", "wb_url_code": "ML", "undp_code": "MLI"},
     "maroc": {"name": "Maroc", "freedom_house_slug": "morocco", "world_bank_code": "MAR", "wb_url_code": "MA", "undp_code": "MAR"},
-    "maurice": {"name": "Maurice", "freedom_house_slug": "mauritius", "world_bank_code": "MUS", "wb_url_code": "MU", "undp_code": "MUS"},
     "mauritanie": {"name": "Mauritanie", "freedom_house_slug": "mauritania", "world_bank_code": "MRT", "wb_url_code": "MR", "undp_code": "MRT"},
     "mexique": {"name": "Mexique", "freedom_house_slug": "mexico", "world_bank_code": "MEX", "wb_url_code": "MX", "undp_code": "MEX"},
-    "moldavie": {"name": "Moldavie", "freedom_house_slug": "moldova", "world_bank_code": "MDA", "wb_url_code": "MD", "undp_code": "MDA"},
-    "mongolie": {"name": "Mongolie", "freedom_house_slug": "mongolia", "world_bank_code": "MNG", "wb_url_code": "MN", "undp_code": "MNG"},
-    "montenegro": {"name": "Monténégro", "freedom_house_slug": "montenegro", "world_bank_code": "MNE", "wb_url_code": "ME", "undp_code": "MNE"},
     "mozambique": {"name": "Mozambique", "freedom_house_slug": "mozambique", "world_bank_code": "MOZ", "wb_url_code": "MZ", "undp_code": "MOZ"},
-    "namibie": {"name": "Namibie", "freedom_house_slug": "namibia", "world_bank_code": "NAM", "wb_url_code": "NA", "undp_code": "NAM"},
-    "nepal": {"name": "Népal", "freedom_house_slug": "nepal", "world_bank_code": "NPL", "wb_url_code": "NP", "undp_code": "NPL"},
-    "nicaragua": {"name": "Nicaragua", "freedom_house_slug": "nicaragua", "world_bank_code": "NIC", "wb_url_code": "NI", "undp_code": "NIC"},
     "niger": {"name": "Niger", "freedom_house_slug": "niger", "world_bank_code": "NER", "wb_url_code": "NE", "undp_code": "NER"},
     "nigeria": {"name": "Nigéria", "freedom_house_slug": "nigeria", "world_bank_code": "NGA", "wb_url_code": "NG", "undp_code": "NGA"},
-    "ouganda": {"name": "Ouganda", "freedom_house_slug": "uganda", "world_bank_code": "UGA", "wb_url_code": "UG", "undp_code": "UGA"},
-    "ouzbekistan": {"name": "Ouzbékistan", "freedom_house_slug": "uzbekistan", "world_bank_code": "UZB", "wb_url_code": "UZ", "undp_code": "UZB"},
     "pakistan": {"name": "Pakistan", "freedom_house_slug": "pakistan", "world_bank_code": "PAK", "wb_url_code": "PK", "undp_code": "PAK"},
-    "panama": {"name": "Panama", "freedom_house_slug": "panama", "world_bank_code": "PAN", "wb_url_code": "PA", "undp_code": "PAN"},
-    "paraguay": {"name": "Paraguay", "freedom_house_slug": "paraguay", "world_bank_code": "PRY", "wb_url_code": "PY", "undp_code": "PRY"},
     "perou": {"name": "Pérou", "freedom_house_slug": "peru", "world_bank_code": "PER", "wb_url_code": "PE", "undp_code": "PER"},
     "philippines": {"name": "Philippines", "freedom_house_slug": "philippines", "world_bank_code": "PHL", "wb_url_code": "PH", "undp_code": "PHL"},
     "rdc": {"name": "RDC (Congo-Kinshasa)", "freedom_house_slug": "democratic-republic-of-congo", "world_bank_code": "COD", "wb_url_code": "CD", "undp_code": "COD"},
-    "republique_dominicaine": {"name": "République dominicaine", "freedom_house_slug": "dominican-republic", "world_bank_code": "DOM", "wb_url_code": "DO", "undp_code": "DOM"},
     "rwanda": {"name": "Rwanda", "freedom_house_slug": "rwanda", "world_bank_code": "RWA", "wb_url_code": "RW", "undp_code": "RWA"},
-    "sainte_lucie": {"name": "Sainte-Lucie", "freedom_house_slug": "saint-lucia", "world_bank_code": "LCA", "wb_url_code": "LC", "undp_code": "LCA"},
-    "saint_vincent": {"name": "Saint-Vincent-et-les-Grenadines", "freedom_house_slug": "saint-vincent-and-the-grenadines", "world_bank_code": "VCT", "wb_url_code": "VC", "undp_code": "VCT"},
-    "salvador": {"name": "Salvador", "freedom_house_slug": "el-salvador", "world_bank_code": "SLV", "wb_url_code": "SV", "undp_code": "SLV"},
-    "samoa": {"name": "Samoa", "freedom_house_slug": "samoa", "world_bank_code": "WSM", "wb_url_code": "WS", "undp_code": "WSM"},
-    "sao_tome": {"name": "Sao Tomé-et-Principe", "freedom_house_slug": "sao-tome-and-principe", "world_bank_code": "STP", "wb_url_code": "ST", "undp_code": "STP"},
     "senegal": {"name": "Sénégal", "freedom_house_slug": "senegal", "world_bank_code": "SEN", "wb_url_code": "SN", "undp_code": "SEN"},
-    "serbie": {"name": "Serbie", "freedom_house_slug": "serbia", "world_bank_code": "SRB", "wb_url_code": "RS", "undp_code": "SRB"},
-    "seychelles": {"name": "Seychelles", "freedom_house_slug": "seychelles", "world_bank_code": "SYC", "wb_url_code": "SC", "undp_code": "SYC"},
-    "sierra_leone": {"name": "Sierra Leone", "freedom_house_slug": "sierra-leone", "world_bank_code": "SLE", "wb_url_code": "SL", "undp_code": "SLE"},
     "somalie": {"name": "Somalie", "freedom_house_slug": "somalia", "world_bank_code": "SOM", "wb_url_code": "SO", "undp_code": "SOM"},
     "soudan": {"name": "Soudan", "freedom_house_slug": "sudan", "world_bank_code": "SDN", "wb_url_code": "SD", "undp_code": "SDN"},
-    "sri_lanka": {"name": "Sri Lanka", "freedom_house_slug": "sri-lanka", "world_bank_code": "LKA", "wb_url_code": "LK", "undp_code": "LKA"},
-    "suriname": {"name": "Suriname", "freedom_house_slug": "suriname", "world_bank_code": "SUR", "wb_url_code": "SR", "undp_code": "SUR"},
-    "syrie": {"name": "Syrie", "freedom_house_slug": "syria", "world_bank_code": "SYR", "wb_url_code": "SY", "undp_code": "SYR"},
-    "tadjikistan": {"name": "Tadjikistan", "freedom_house_slug": "tajikistan", "world_bank_code": "TJK", "wb_url_code": "TJ", "undp_code": "TJK"},
     "tanzanie": {"name": "Tanzanie", "freedom_house_slug": "tanzania", "world_bank_code": "TZA", "wb_url_code": "TZ", "undp_code": "TZA"},
     "tchad": {"name": "Tchad", "freedom_house_slug": "chad", "world_bank_code": "TCD", "wb_url_code": "TD", "undp_code": "TCD"},
-    "thailande": {"name": "Thaïlande", "freedom_house_slug": "thailand", "world_bank_code": "THA", "wb_url_code": "TH", "undp_code": "THA"},
-    "timor_leste": {"name": "Timor-Leste", "freedom_house_slug": "timor-leste", "world_bank_code": "TLS", "wb_url_code": "TL", "undp_code": "TLS"},
-    "togo": {"name": "Togo", "freedom_house_slug": "togo", "world_bank_code": "TGO", "wb_url_code": "TG", "undp_code": "TGO"},
     "tunisie": {"name": "Tunisie", "freedom_house_slug": "tunisia", "world_bank_code": "TUN", "wb_url_code": "TN", "undp_code": "TUN"},
     "turquie": {"name": "Turquie", "freedom_house_slug": "turkey", "world_bank_code": "TUR", "wb_url_code": "TR", "undp_code": "TUR"},
     "ukraine": {"name": "Ukraine", "freedom_house_slug": "ukraine", "world_bank_code": "UKR", "wb_url_code": "UA", "undp_code": "UKR"},
-    "uruguay": {"name": "Uruguay", "freedom_house_slug": "uruguay", "world_bank_code": "URY", "wb_url_code": "UY", "undp_code": "URY"},
-    "vanuatu": {"name": "Vanuatu", "freedom_house_slug": "vanuatu", "world_bank_code": "VUT", "wb_url_code": "VU", "undp_code": "VUT"},
     "vietnam": {"name": "Vietnam", "freedom_house_slug": "vietnam", "world_bank_code": "VNM", "wb_url_code": "VN", "undp_code": "VNM"},
     "yemen": {"name": "Yémen", "freedom_house_slug": "yemen", "world_bank_code": "YEM", "wb_url_code": "YE", "undp_code": "YEM"},
     "zambie": {"name": "Zambie", "freedom_house_slug": "zambia", "world_bank_code": "ZMB", "wb_url_code": "ZM", "undp_code": "ZMB"},
@@ -286,6 +425,277 @@ def ind(label, value, unit, year, source, url=None, note=None):
         "URL source": url or "",
         "Note": age_flag,
     }
+
+
+# ─────────────────────────────────────────────
+# Système de coloration intelligente
+# ─────────────────────────────────────────────
+
+def get_color_badge(label, value, unit):
+    """Retourne la classe CSS du badge selon la logique de l'indicateur."""
+    if value in ["N/D", "—", "À compléter", "Non disponible", "Indisponible", None, ""]:
+        return "badge-grey"
+
+    label_lower = label.lower()
+    val_str = str(value).strip()
+
+    # ── Freedom House statut
+    if "statut" in label_lower and "freedom" in label_lower:
+        if "Free" == val_str:
+            return "badge-green"
+        elif "Partly Free" == val_str:
+            return "badge-orange"
+        elif "Not Free" == val_str:
+            return "badge-red"
+        return "badge-grey"
+
+    # ── Freedom House score /100
+    if "freedom house" in label_lower and "score" in label_lower:
+        try:
+            score = int(val_str.split("/")[0])
+            if score >= 70: return "badge-green"
+            elif score >= 40: return "badge-orange"
+            else: return "badge-red"
+        except: return "badge-grey"
+
+    # ── Droits politiques /40
+    if "droits politiques" in label_lower:
+        try:
+            score = int(val_str.split("/")[0])
+            if score >= 28: return "badge-green"
+            elif score >= 15: return "badge-orange"
+            else: return "badge-red"
+        except: return "badge-grey"
+
+    # ── Libertés civiles /60
+    if "libertés civiles" in label_lower:
+        try:
+            score = int(val_str.split("/")[0])
+            if score >= 42: return "badge-green"
+            elif score >= 22: return "badge-orange"
+            else: return "badge-red"
+        except: return "badge-grey"
+
+    # ── IDH
+    if "idh" in label_lower and "valeur" in label_lower:
+        try:
+            v = float(val_str)
+            if v >= 0.800: return "badge-green"
+            elif v >= 0.700: return "badge-lightgreen"
+            elif v >= 0.550: return "badge-orange"
+            else: return "badge-red"
+        except: return "badge-grey"
+
+    # ── WGI [-2.5 ; +2.5]
+    if "wgi" in label_lower:
+        try:
+            v = float(val_str)
+            if v >= 0.5: return "badge-green"
+            elif v >= -0.3: return "badge-orange"
+            else: return "badge-red"
+        except: return "badge-grey"
+
+    # ── Gini (inégalités — plus c'est bas, mieux c'est)
+    if "gini" in label_lower:
+        try:
+            v = float(val_str)
+            if v < 32: return "badge-green"
+            elif v < 45: return "badge-orange"
+            else: return "badge-red"
+        except: return "badge-grey"
+
+    # ── Taux de pauvreté
+    if "pauvreté" in label_lower or "pauvrete" in label_lower:
+        try:
+            v = float(val_str.replace("%", "").replace(",", "."))
+            if v < 5: return "badge-green"
+            elif v < 20: return "badge-orange"
+            else: return "badge-red"
+        except: return "badge-grey"
+
+    # ── PIB/habitant
+    if "pib" in label_lower and "habitant" in label_lower:
+        try:
+            v = float(val_str.replace("$", "").replace(",", "").replace(" ", ""))
+            if v > 10000: return "badge-green"
+            elif v > 3000: return "badge-orange"
+            else: return "badge-red"
+        except: return "badge-grey"
+
+    # ── Croissance
+    if "croissance" in label_lower:
+        try:
+            v = float(val_str.replace("%", "").replace(",", "."))
+            if v > 5: return "badge-green"
+            elif v > 2: return "badge-lightgreen"
+            elif v > 0: return "badge-orange"
+            else: return "badge-red"
+        except: return "badge-grey"
+
+    # ── Inflation
+    if "inflation" in label_lower:
+        try:
+            v = float(val_str.replace("%", "").replace(",", "."))
+            if v < 4: return "badge-green"
+            elif v < 10: return "badge-orange"
+            else: return "badge-red"
+        except: return "badge-grey"
+
+    # ── Chômage des jeunes
+    if "chômage" in label_lower or "chomage" in label_lower:
+        try:
+            v = float(val_str.replace("%", "").replace(",", "."))
+            if v < 10: return "badge-green"
+            elif v < 25: return "badge-orange"
+            else: return "badge-red"
+        except: return "badge-grey"
+
+    # ── Taux d'emploi / scolarisation (plus c'est haut, mieux c'est)
+    if any(k in label_lower for k in ["emploi", "scolarisation"]):
+        try:
+            v = float(val_str.replace("%", "").replace(",", "."))
+            if v > 75: return "badge-green"
+            elif v > 50: return "badge-orange"
+            else: return "badge-red"
+        except: return "badge-grey"
+
+    # ── IDE, solde courant — informationnel
+    if any(k in label_lower for k in ["ide", "solde courant", "exportations", "importations"]):
+        return "badge-blue"
+
+    # ── Statut de revenu
+    if "statut de revenu" in label_lower or "région" in label_lower:
+        return "badge-purple"
+
+    # ── Défaut
+    try:
+        float(str(value).replace(",", ".").replace("$", "").replace("%", "").replace(" ", ""))
+        return "badge-blue"
+    except:
+        return "badge-grey"
+
+
+def get_trend_icon(label, value):
+    """Icône de tendance contextuelle."""
+    badge = get_color_badge(label, value, "")
+    if badge == "badge-green": return "▲"
+    elif badge == "badge-lightgreen": return "↗"
+    elif badge == "badge-orange": return "→"
+    elif badge == "badge-red": return "▼"
+    return ""
+
+
+# ─────────────────────────────────────────────
+# Groupes thématiques
+# ─────────────────────────────────────────────
+
+# Mapping indicateur → groupe thématique
+THEMATIC_GROUPS_P1 = {
+    "🗳️ Régime politique & libertés": [
+        "Freedom House — Score",
+        "Freedom House — Statut",
+        "Freedom House",
+        "Droits politiques",
+        "Libertés civiles",
+        "EIU — Democracy Index",
+    ],
+    "🏛️ Gouvernance institutionnelle": [
+        "WGI — Expression & responsabilité",
+        "WGI — Stabilité politique & absence de violence",
+        "WGI — Efficacité gouvernementale",
+        "WGI — Qualité réglementaire",
+        "WGI — État de droit",
+        "WGI — Contrôle de la corruption",
+    ],
+    "💰 Développement économique & inégalités": [
+        "IDH — Valeur",
+        "IDH — Rang mondial",
+        "IDH",
+        "Statut de revenu (BM)",
+        "Région BM",
+        "PIB / habitant",
+        "Indice de Gini",
+        "Taux de pauvreté (< 2,15 $/j)",
+    ],
+    "👷 Marché du travail": [
+        "Taux d'emploi total",
+        "Chômage des jeunes (15-24 ans)",
+        "Taux d'emploi des femmes",
+        "Taux d'informalité",
+    ],
+    "📚 Capital humain & éducation": [
+        "Scolarisation primaire (taux brut)",
+        "Scolarisation secondaire (taux brut)",
+        "Scolarisation tertiaire (taux brut)",
+    ],
+}
+
+THEMATIC_GROUPS_P2 = {
+    "📊 Macroéconomie & revenus": [
+        "PIB nominal total",
+        "PIB par habitant",
+        "Croissance du PIB réel — dernière obs.",
+        "Croissance moyenne PIB réel depuis 2010",
+        "Croissance moyenne PIB réel — 10 dernières obs.",
+        "Inflation annuelle",
+    ],
+    "🏗️ Structure productive": [
+        "Agriculture — part du PIB",
+        "Industrie — part du PIB",
+        "Manufacturier — part du PIB",
+        "Services — part du PIB",
+        "Part secteur extractif — PIB",
+        "Part du tourisme dans le PIB",
+    ],
+    "👥 Emploi sectoriel": [
+        "Emploi agricole",
+        "Emploi industriel",
+        "Emploi dans les services",
+    ],
+    "💹 Demande intérieure & investissement": [
+        "Consommation privée",
+        "Consommation publique",
+        "Formation brute de capital fixe",
+        "Investissement privé",
+        "Crédit domestique secteur privé",
+    ],
+    "🌍 Ouverture & financement externe": [
+        "Exportations biens et services",
+        "Importations biens et services",
+        "Solde courant",
+        "IDE entrants nets",
+        "Transferts de migrants",
+    ],
+    "🔭 Perspectives & éléments qualitatifs": [
+        "Croissance potentielle FMI",
+        "Prévisions FMI (année en cours / N+1)",
+        "Réformes et chocs récents",
+        "Part secteur extractif — exportations",
+        "Part secteur extractif — recettes pub.",
+    ],
+}
+
+
+def group_rows(rows, groups):
+    """Groupe les lignes selon le mapping thématique."""
+    grouped = {g: [] for g in groups}
+    other = []
+    used = set()
+
+    for label_key, group_name in [(l, g) for g, labels in groups.items() for l in labels]:
+        for r in rows:
+            if r["Indicateur"] == label_key and r["Indicateur"] not in used:
+                grouped[group_name].append(r)
+                used.add(r["Indicateur"])
+
+    for r in rows:
+        if r["Indicateur"] not in used:
+            other.append(r)
+
+    if other:
+        grouped["📎 Autres indicateurs"] = other
+
+    return {k: v for k, v in grouped.items() if v}
 
 
 # ─────────────────────────────────────────────
@@ -402,8 +812,8 @@ def average_last_n(history, n=10):
 def load_undp_hdi_table():
     url = "https://hdr.undp.org/sites/default/files/2025_HDR/HDR25_Statistical_Annex_HDI_Table.xlsx"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*",
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "*/*",
         "Referer": "https://hdr.undp.org/data-center/documentation-and-downloads",
     }
     r = requests.get(url, headers=headers, timeout=30)
@@ -432,8 +842,6 @@ def fetch_undp_hdi(country_name=None):
         "Congo (Brazzaville)": ["Congo"],
         "Côte d'Ivoire": ["Côte d'Ivoire", "Cote d'Ivoire"],
         "Birmanie (Myanmar)": ["Myanmar"],
-        "Sao Tomé-et-Principe": ["Sao Tome and Principe", "São Tomé and Príncipe"],
-        "Eswatini": ["Eswatini (Kingdom of)", "Eswatini"],
         "Tanzanie": ["Tanzania (United Republic of)"],
         "Bolivie": ["Bolivia (Plurinational State of)", "Bolivia"],
         "Laos": ["Lao People's Democratic Republic"],
@@ -460,14 +868,11 @@ def fetch_undp_hdi(country_name=None):
 # ─────────────────────────────────────────────
 
 def build_pillar1(wb_code, wb_url_base, fh, wb_info, hdi):
-    """Pilier 1 — Environnement politique et socioéconomique"""
     rows = []
-
     income_code = wb_info.get("income_code", "") if wb_info else ""
     income_label = INCOME_LABELS.get(income_code, wb_info.get("income_label", "N/D") if wb_info else "N/D")
     region = wb_info.get("region", "N/D") if wb_info else "N/D"
 
-    # Freedom House
     if fh and not fh.get("error"):
         if fh.get("score") is not None:
             rows.append(ind("Freedom House — Score", f"{fh['score']}/100", None, fh["year"], "Freedom House", fh["url"]))
@@ -482,7 +887,6 @@ def build_pillar1(wb_code, wb_url_base, fh, wb_info, hdi):
 
     rows.append(ind("EIU — Democracy Index", "Non disponible", None, None, "EIU", "https://www.eiu.com", "Accès abonnement requis"))
 
-    # IDH
     if hdi.get("value") is not None:
         rows.append(ind("IDH — Valeur", f"{hdi['value']:.3f}", None, hdi["year"], "PNUD / Human Development Report", hdi["source_url"]))
         if hdi.get("rank"):
@@ -490,7 +894,6 @@ def build_pillar1(wb_code, wb_url_base, fh, wb_info, hdi):
     else:
         rows.append(ind("IDH", "N/D", None, None, "PNUD / Human Development Report", hdi.get("source_url", ""), hdi.get("error", "")))
 
-    # Banque mondiale — positionnement
     rows.append(ind("Statut de revenu (BM)", income_label, None, None, "Banque mondiale", wb_url_base))
     rows.append(ind("Région BM", region, None, None, "Banque mondiale", wb_url_base))
 
@@ -499,14 +902,13 @@ def build_pillar1(wb_code, wb_url_base, fh, wb_info, hdi):
         rows.append(ind("PIB / habitant", f"${gdp_val:,.0f}", "USD", gdp_year, "Banque mondiale", wb_url_base))
 
     gini_val, gini_year = fetch_wb_latest(wb_code, "SI.POV.GINI")
-    rows.append(ind("Indice de Gini", f"{gini_val:.1f}" if gini_val else "N/D", None, gini_year, "Banque mondiale", wb_url_base,
-                    None if gini_val else "Enquêtes disponibles par intermittence"))
+    rows.append(ind("Indice de Gini", f"{gini_val:.1f}" if gini_val else "N/D", None, gini_year,
+                    "Banque mondiale", wb_url_base, None if gini_val else "Enquêtes disponibles par intermittence"))
 
     poverty_val, poverty_year = fetch_wb_latest(wb_code, "SI.POV.DDAY")
     rows.append(ind("Taux de pauvreté (< 2,15 $/j)", f"{poverty_val:.1f}" if poverty_val else "N/D", "%", poverty_year,
                     "Banque mondiale", wb_url_base, None if poverty_val else "Absent pour PRITS/PRE"))
 
-    # Gouvernance WGI
     wgi_indicators = [
         ("VA.EST", "WGI — Expression & responsabilité"),
         ("PV.EST", "WGI — Stabilité politique & absence de violence"),
@@ -520,7 +922,6 @@ def build_pillar1(wb_code, wb_url_base, fh, wb_info, hdi):
         rows.append(ind(label, f"{val:.2f}" if val is not None else "N/D", "[-2.5 ; +2.5]", year,
                         "Banque mondiale (WGI)", "https://info.worldbank.org/governance/wgi/"))
 
-    # Marché du travail
     labour = [
         ("SL.EMP.TOTL.SP.ZS", "Taux d'emploi total", "%", None),
         ("SL.UEM.1524.ZS", "Chômage des jeunes (15-24 ans)", "%", None),
@@ -532,7 +933,6 @@ def build_pillar1(wb_code, wb_url_base, fh, wb_info, hdi):
         rows.append(ind(label, f"{val:.1f}" if val is not None else "N/D", unit, year,
                         "Banque mondiale / OIT", wb_url_base, None if val is not None else default_note))
 
-    # Éducation
     education = [
         ("SE.PRM.ENRR", "Scolarisation primaire (taux brut)", "%"),
         ("SE.SEC.ENRR", "Scolarisation secondaire (taux brut)", "%"),
@@ -547,33 +947,31 @@ def build_pillar1(wb_code, wb_url_base, fh, wb_info, hdi):
 
 
 def build_pillar2(wb_code):
-    """Pilier 2 — Modèle économique et régime de croissance"""
     rows = []
-
     wb_url = "https://data.worldbank.org/indicator/"
 
     indicators = [
-        ("NY.GDP.MKTP.CD",     "PIB nominal total",                          "USD courants"),
-        ("NY.GDP.PCAP.CD",     "PIB par habitant",                           "USD courants"),
-        ("NY.GDP.MKTP.KD.ZG",  "Croissance du PIB réel — dernière obs.",     "%"),
-        ("FP.CPI.TOTL.ZG",     "Inflation annuelle",                         "%"),
-        ("NV.AGR.TOTL.ZS",     "Agriculture — part du PIB",                  "% du PIB"),
-        ("NV.IND.TOTL.ZS",     "Industrie — part du PIB",                    "% du PIB"),
-        ("NV.IND.MANF.ZS",     "Manufacturier — part du PIB",                "% du PIB"),
-        ("NV.SRV.TOTL.ZS",     "Services — part du PIB",                     "% du PIB"),
-        ("SL.AGR.EMPL.ZS",     "Emploi agricole",                            "% emploi total"),
-        ("SL.IND.EMPL.ZS",     "Emploi industriel",                          "% emploi total"),
-        ("SL.SRV.EMPL.ZS",     "Emploi dans les services",                   "% emploi total"),
-        ("NE.CON.PRVT.ZS",     "Consommation privée",                        "% du PIB"),
-        ("NE.CON.GOVT.ZS",     "Consommation publique",                      "% du PIB"),
-        ("NE.GDI.FTOT.ZS",     "Formation brute de capital fixe",            "% du PIB"),
-        ("NE.GDI.FPRV.ZS",     "Investissement privé",                       "% du PIB"),
-        ("BX.KLT.DINV.WD.GD.ZS", "IDE entrants nets",                       "% du PIB"),
-        ("BX.TRF.PWKR.DT.GD.ZS", "Transferts de migrants",                  "% du PIB"),
-        ("FS.AST.PRVT.GD.ZS",  "Crédit domestique secteur privé",            "% du PIB"),
-        ("NE.EXP.GNFS.ZS",     "Exportations biens et services",             "% du PIB"),
-        ("NE.IMP.GNFS.ZS",     "Importations biens et services",             "% du PIB"),
-        ("BN.CAB.XOKA.GD.ZS",  "Solde courant",                              "% du PIB"),
+        ("NY.GDP.MKTP.CD", "PIB nominal total", "USD courants"),
+        ("NY.GDP.PCAP.CD", "PIB par habitant", "USD courants"),
+        ("NY.GDP.MKTP.KD.ZG", "Croissance du PIB réel — dernière obs.", "%"),
+        ("FP.CPI.TOTL.ZG", "Inflation annuelle", "%"),
+        ("NV.AGR.TOTL.ZS", "Agriculture — part du PIB", "% du PIB"),
+        ("NV.IND.TOTL.ZS", "Industrie — part du PIB", "% du PIB"),
+        ("NV.IND.MANF.ZS", "Manufacturier — part du PIB", "% du PIB"),
+        ("NV.SRV.TOTL.ZS", "Services — part du PIB", "% du PIB"),
+        ("SL.AGR.EMPL.ZS", "Emploi agricole", "% emploi total"),
+        ("SL.IND.EMPL.ZS", "Emploi industriel", "% emploi total"),
+        ("SL.SRV.EMPL.ZS", "Emploi dans les services", "% emploi total"),
+        ("NE.CON.PRVT.ZS", "Consommation privée", "% du PIB"),
+        ("NE.CON.GOVT.ZS", "Consommation publique", "% du PIB"),
+        ("NE.GDI.FTOT.ZS", "Formation brute de capital fixe", "% du PIB"),
+        ("NE.GDI.FPRV.ZS", "Investissement privé", "% du PIB"),
+        ("BX.KLT.DINV.WD.GD.ZS", "IDE entrants nets", "% du PIB"),
+        ("BX.TRF.PWKR.DT.GD.ZS", "Transferts de migrants", "% du PIB"),
+        ("FS.AST.PRVT.GD.ZS", "Crédit domestique secteur privé", "% du PIB"),
+        ("NE.EXP.GNFS.ZS", "Exportations biens et services", "% du PIB"),
+        ("NE.IMP.GNFS.ZS", "Importations biens et services", "% du PIB"),
+        ("BN.CAB.XOKA.GD.ZS", "Solde courant", "% du PIB"),
     ]
 
     growth_hist = []
@@ -585,7 +983,6 @@ def build_pillar2(wb_code):
         if code == "NY.GDP.MKTP.KD.ZG":
             growth_hist = hist
 
-    # Moyennes de croissance
     avg_2010 = average_since(growth_hist, 2010)
     avg_10y = average_last_n(growth_hist, 10)
 
@@ -598,29 +995,26 @@ def build_pillar2(wb_code):
     rows.append(ind(
         "Croissance moyenne PIB réel depuis 2010",
         f"{avg_2010:.1f}" if avg_2010 is not None else "N/D",
-        "%", period_2010,
-        "Calcul interne — Banque mondiale",
+        "%", period_2010, "Calcul interne — Banque mondiale",
         f"{wb_url}NY.GDP.MKTP.KD.ZG",
         None if avg_2010 is not None else "Série insuffisante"
     ))
     rows.append(ind(
         "Croissance moyenne PIB réel — 10 dernières obs.",
         f"{avg_10y:.1f}" if avg_10y is not None else "N/D",
-        "%", period_10y,
-        "Calcul interne — Banque mondiale",
+        "%", period_10y, "Calcul interne — Banque mondiale",
         f"{wb_url}NY.GDP.MKTP.KD.ZG",
         None if avg_10y is not None else "Série insuffisante"
     ))
 
-    # Indicateurs à compléter manuellement
     manual_guides = [
-        ("Part secteur extractif — PIB",           "Comptes nationaux détaillés / Article IV FMI / EITI"),
-        ("Part secteur extractif — exportations",  "UN Comtrade / OEC / Article IV FMI"),
+        ("Part secteur extractif — PIB", "Comptes nationaux détaillés / Article IV FMI / EITI"),
+        ("Part secteur extractif — exportations", "UN Comtrade / OEC / Article IV FMI"),
         ("Part secteur extractif — recettes pub.", "Article IV FMI / DSA FMI / budget national"),
-        ("Part du tourisme dans le PIB",            "WTTC / UN Tourism / Article IV FMI"),
-        ("Croissance potentielle FMI",              "Article IV FMI — texte ou annexes"),
-        ("Prévisions FMI (année en cours / N+1)",  "Article IV FMI / WEO"),
-        ("Réformes et chocs récents",               "Article IV FMI / Banque mondiale MPO"),
+        ("Part du tourisme dans le PIB", "WTTC / UN Tourism / Article IV FMI"),
+        ("Croissance potentielle FMI", "Article IV FMI — texte ou annexes"),
+        ("Prévisions FMI (année en cours / N+1)", "Article IV FMI / WEO"),
+        ("Réformes et chocs récents", "Article IV FMI / Banque mondiale MPO"),
     ]
     for label, note in manual_guides:
         rows.append(ind(label, "À compléter", None, None, "Source sectorielle", "", note))
@@ -629,17 +1023,15 @@ def build_pillar2(wb_code):
 
 
 # ─────────────────────────────────────────────
-# Prompts IA par pilier
+# Prompts IA
 # ─────────────────────────────────────────────
 
 def build_prompt_pillar1(country_name, rows):
     lines = [
         f"FICHE PAYS — {country_name.upper()}",
         "PILIER 1 : ENVIRONNEMENT POLITIQUE ET SOCIOÉCONOMIQUE",
-        "=" * 70,
-        "",
-        "DONNÉES COLLECTÉES",
-        "-" * 40,
+        "=" * 70, "",
+        "DONNÉES COLLECTÉES", "-" * 40,
     ]
     for r in rows:
         label = r.get("Indicateur", "")
@@ -652,42 +1044,19 @@ def build_prompt_pillar1(country_name, rows):
         year_str = f" ({year})" if year and year != "—" else ""
         note_str = f" — ⚠️ {note}" if note else ""
         lines.append(f"• {label} : {val}{unit_str}{year_str} — {source}{note_str}")
-
     lines += [
-        "",
-        "=" * 70,
-        "CONSIGNE DE RÉDACTION",
-        "-" * 40,
-        "",
+        "", "=" * 70, "CONSIGNE DE RÉDACTION", "-" * 40, "",
         "À partir des données ci-dessus, rédige une analyse structurée du Pilier 1.",
-        "",
-        "STRUCTURE ATTENDUE :",
-        "",
-        "1. RÉGIME POLITIQUE ET LIBERTÉS",
-        "   - Caractérise le régime politique (démocratie, autoritarisme, hybride).",
-        "   - Appuie-toi sur Freedom House (score, statut, droits politiques, libertés civiles).",
-        "   - Signale les tendances récentes si elles ressortent des données.",
-        "",
+        "", "STRUCTURE ATTENDUE :",
+        "", "1. RÉGIME POLITIQUE ET LIBERTÉS",
         "2. GOUVERNANCE INSTITUTIONNELLE",
-        "   - Analyse les 6 indicateurs WGI : identifie les forces et faiblesses.",
-        "   - Mets en évidence les écarts entre indicateurs (ex : bonne stabilité mais faible état de droit).",
-        "",
         "3. DÉVELOPPEMENT HUMAIN ET INÉGALITÉS",
-        "   - Commente l'IDH (valeur, rang) et son positionnement régional.",
-        "   - Articule avec le Gini, le taux de pauvreté et le PIB/habitant.",
-        "",
         "4. MARCHÉ DU TRAVAIL",
-        "   - Commente l'emploi, le chômage des jeunes, l'emploi féminin et l'informalité.",
-        "   - Identifie les tensions ou fragilités structurelles.",
-        "",
         "5. CAPITAL HUMAIN (ÉDUCATION)",
-        "   - Commente les taux de scolarisation par niveau.",
-        "   - Signale les ruptures ou décrochages significatifs.",
-        "",
-        "RÈGLES :",
+        "", "RÈGLES :",
         "- Ne pas inventer de chiffres. Utiliser uniquement les données fournies.",
         "- Si une donnée est manquante ou ancienne, le signaler explicitement.",
-        "- Style analytique, institutionnel, sans bullet points dans la rédaction finale.",
+        "- Style analytique, institutionnel, sans bullet points.",
         "- Environ 400-500 mots.",
     ]
     return "\n".join(lines)
@@ -697,10 +1066,8 @@ def build_prompt_pillar2(country_name, rows):
     lines = [
         f"FICHE PAYS — {country_name.upper()}",
         "PILIER 2 : MODÈLE ÉCONOMIQUE ET RÉGIME DE CROISSANCE",
-        "=" * 70,
-        "",
-        "DONNÉES COLLECTÉES",
-        "-" * 40,
+        "=" * 70, "",
+        "DONNÉES COLLECTÉES", "-" * 40,
     ]
     for r in rows:
         label = r.get("Indicateur", "")
@@ -713,83 +1080,178 @@ def build_prompt_pillar2(country_name, rows):
         year_str = f" ({year})" if year and year != "—" else ""
         note_str = f" — ⚠️ {note}" if note else ""
         lines.append(f"• {label} : {val}{unit_str}{year_str} — {source}{note_str}")
-
     lines += [
-        "",
-        "=" * 70,
-        "CONSIGNE DE RÉDACTION",
-        "-" * 40,
-        "",
+        "", "=" * 70, "CONSIGNE DE RÉDACTION", "-" * 40, "",
         "À partir des données ci-dessus, rédige une analyse structurée du Pilier 2.",
-        "Le texte doit comporter deux sous-parties explicites.",
-        "",
-        "PARTIE 1 — MODÈLE ÉCONOMIQUE",
-        "   - Caractérise la structure productive : diversifiée ou non, industrialisée, agricole,",
-        "     extractive, tertiarisée, rentière, ouverte, dépendante des importations.",
-        "   - Présente les principaux secteurs dans l'ordre de leur importance.",
-        "   - Pour chaque secteur majeur : part dans le PIB, dans l'emploi, rôle aux exportations.",
-        "   - Identifie forces structurelles et fragilités structurelles.",
-        "   - Si une transformation est en cours, décris-la et évalue sa solidité.",
-        "   - Conclure par le principal risque structurel du modèle.",
-        "",
+        "", "PARTIE 1 — MODÈLE ÉCONOMIQUE",
         "PARTIE 2 — RÉGIME DE CROISSANCE",
-        "   - Qualifie le rythme de croissance sur longue période (dynamique, faible, volatile...).",
-        "   - Donne la croissance moyenne sur 10 ans ou depuis 2010.",
-        "   - Identifie les moteurs de croissance dominants.",
-        "   - Distingue tendance longue et évolutions récentes.",
-        "   - Mentionne les chocs récents documentés par les données.",
-        "   - Analyse la soutenabilité de la croissance.",
-        "   - Conclure sur les perspectives et risques à moyen terme.",
-        "",
-        "RÈGLES :",
-        "- Ne pas inventer de chiffres. Les indicateurs 'À compléter' doivent être signalés comme manquants.",
-        "- Style analytique, institutionnel, dense, sans bullet points dans la rédaction finale.",
+        "", "RÈGLES :",
+        "- Ne pas inventer de chiffres.",
+        "- Style analytique, institutionnel, dense, sans bullet points.",
         "- Environ 500-600 mots.",
     ]
     return "\n".join(lines)
 
 
 # ─────────────────────────────────────────────
-# Affichage
+# Affichage thématique enrichi
 # ─────────────────────────────────────────────
 
-DISPLAY_COLS = ["Indicateur", "Valeur", "Unité", "Année", "Source", "URL source", "Note"]
+THEME_COLORS = {
+    "🗳️ Régime politique & libertés": "#e8001b",
+    "🏛️ Gouvernance institutionnelle": "#003189",
+    "💰 Développement économique & inégalités": "#1a7a45",
+    "👷 Marché du travail": "#c17000",
+    "📚 Capital humain & éducation": "#6b21a8",
+    "📊 Macroéconomie & revenus": "#003189",
+    "🏗️ Structure productive": "#c17000",
+    "👥 Emploi sectoriel": "#1a7a45",
+    "💹 Demande intérieure & investissement": "#0e7a8a",
+    "🌍 Ouverture & financement externe": "#4a5568",
+    "🔭 Perspectives & éléments qualitatifs": "#6b21a8",
+    "📎 Autres indicateurs": "#555",
+}
 
 
-def show_pillar(title, subtitle, rows, source_label=None, source_url=None):
-    st.markdown(f'<div class="pillar-title">{title}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="pillar-subtitle">{subtitle}</div>', unsafe_allow_html=True)
+def render_indicator_card(row):
+    """Génère le HTML d'une ligne indicateur."""
+    label = row.get("Indicateur", "")
+    value = str(row.get("Valeur", "N/D"))
+    unit = row.get("Unité", "")
+    year = row.get("Année", "—")
+    source = row.get("Source", "")
+    url = row.get("URL source", "")
+    note = row.get("Note", "")
 
-    if not rows:
-        st.markdown('<p class="warn-missing">Aucune donnée disponible.</p>', unsafe_allow_html=True)
-        return
+    badge_class = get_color_badge(label, value, unit)
+    unit_str = f" {unit}" if unit else ""
+    year_str = f"({year})" if year and year != "—" else ""
 
-    df = pd.DataFrame(rows)
-    for col in DISPLAY_COLS:
-        if col not in df.columns:
-            df[col] = ""
-    df = df[DISPLAY_COLS]
-    df["URL source"] = df["URL source"].fillna("").astype(str)
+    source_html = f'<a href="{url}" target="_blank" style="color:#aaa;text-decoration:none;">🔗 {source}</a>' if url else f'<span style="color:#aaa;">{source}</span>'
+    note_html = f'<span class="indicator-note">⚠️ {note}</span>' if note else ""
 
-    st.dataframe(
-        df,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "URL source": st.column_config.LinkColumn("Lien", display_text="ouvrir")
-        }
-    )
+    return f"""
+    <div class="indicator-row">
+        <span class="indicator-label">{label}</span>
+        <span class="indicator-value {badge_class}">{value}{unit_str}</span>
+        <span class="indicator-meta">{year_str}</span>
+        <span class="indicator-source">{source_html}</span>
+        {note_html}
+    </div>
+    """
 
-    missing = df["URL source"].str.strip().eq("").sum()
-    if missing > 0:
-        st.markdown(
-            f'<p class="source-note">⚠️ {missing} indicateur(s) sans lien direct — voir colonne Note.</p>',
-            unsafe_allow_html=True
-        )
-    if source_url:
-        st.markdown(
-            f'<p class="source-note">🔗 <a href="{source_url}" target="_blank">{source_label or source_url}</a></p>',
-            unsafe_allow_html=True
+
+def render_theme_group(theme_name, rows, color):
+    """Génère le HTML d'un groupe thématique."""
+    cards_html = "".join(render_indicator_card(r) for r in rows)
+    return f"""
+    <div class="theme-card" style="border-left-color: {color};">
+        <div class="theme-card-title" style="color: {color};">{theme_name}</div>
+        {cards_html}
+    </div>
+    """
+
+
+def compute_summary(rows, pillar_num):
+    """Calcule des métriques résumé pour affichage en haut du pilier."""
+    total = len(rows)
+    available = sum(1 for r in rows if str(r.get("Valeur", "N/D")) not in ["N/D", "—", "À compléter", "Non disponible", "Indisponible"])
+    alerts = sum(1 for r in rows if r.get("Note", ""))
+    green = sum(1 for r in rows if get_color_badge(r["Indicateur"], str(r.get("Valeur", "")), r.get("Unité", "")) in ["badge-green", "badge-lightgreen"])
+    red = sum(1 for r in rows if get_color_badge(r["Indicateur"], str(r.get("Valeur", "")), r.get("Unité", "")) == "badge-red")
+    return total, available, green, red, alerts
+
+
+def show_legend():
+    st.markdown("""
+    <div class="legend-bar">
+        <div class="legend-item"><div class="legend-dot" style="background:#1a7a45;"></div> Favorable</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#2e8b57;"></div> Plutôt favorable</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#c17000;"></div> Intermédiaire</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#c0392b;"></div> Défavorable</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#003189;"></div> Informatif</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#6b21a8;"></div> Qualitatif</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#888;"></div> Non disponible</div>
+        <div class="legend-item" style="margin-left:auto;color:#e07c00;">⚠️ = donnée ancienne ou manquante</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def show_pillar_v2(pillar_title, pillar_subtitle, rows, groups_map):
+    """Affiche un pilier avec groupes thématiques, métriques et onglets."""
+
+    # ── Header
+    st.markdown(f"""
+    <div class="section-header">
+        <h3>{pillar_title}</h3>
+    </div>
+    <div class="section-subtitle">{pillar_subtitle}</div>
+    """, unsafe_allow_html=True)
+
+    # ── Métriques résumé
+    total, available, green, red, alerts = compute_summary(rows, 1)
+    coverage_pct = int(100 * available / total) if total > 0 else 0
+
+    st.markdown(f"""
+    <div class="summary-grid">
+        <div class="summary-card" style="border-top-color:#003189;">
+            <div class="s-label">Indicateurs</div>
+            <div class="s-value">{total}</div>
+            <div class="s-sub">collectés</div>
+        </div>
+        <div class="summary-card" style="border-top-color:#1a7a45;">
+            <div class="s-label">Couverture</div>
+            <div class="s-value">{coverage_pct}%</div>
+            <div class="s-sub">{available} / {total} disponibles</div>
+        </div>
+        <div class="summary-card" style="border-top-color:#1a7a45;">
+            <div class="s-label">Signaux positifs</div>
+            <div class="s-value" style="color:#1a7a45;">{green}</div>
+            <div class="s-sub">indicateurs favorables</div>
+        </div>
+        <div class="summary-card" style="border-top-color:#c0392b;">
+            <div class="s-label">Signaux d'alerte</div>
+            <div class="s-value" style="color:#c0392b;">{red}</div>
+            <div class="s-sub">indicateurs défavorables</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Légende
+    show_legend()
+
+    # ── Groupes thématiques
+    grouped = group_rows(rows, groups_map)
+
+    tab_labels = list(grouped.keys())
+
+    if len(tab_labels) <= 1:
+        for theme, theme_rows in grouped.items():
+            color = THEME_COLORS.get(theme, "#003189")
+            st.markdown(render_theme_group(theme, theme_rows, color), unsafe_allow_html=True)
+    else:
+        tabs = st.tabs(tab_labels)
+        for tab, (theme, theme_rows) in zip(tabs, grouped.items()):
+            with tab:
+                color = THEME_COLORS.get(theme, "#003189")
+                st.markdown(render_theme_group(theme, theme_rows, color), unsafe_allow_html=True)
+
+    # ── Vue tableau complète (expandeur)
+    with st.expander("📋 Voir tous les indicateurs en tableau", expanded=False):
+        df = pd.DataFrame(rows)
+        DISPLAY_COLS = ["Indicateur", "Valeur", "Unité", "Année", "Source", "URL source", "Note"]
+        for col in DISPLAY_COLS:
+            if col not in df.columns:
+                df[col] = ""
+        df = df[DISPLAY_COLS]
+        df["URL source"] = df["URL source"].fillna("").astype(str)
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "URL source": st.column_config.LinkColumn("Lien", display_text="ouvrir")
+            }
         )
 
 
@@ -798,7 +1260,7 @@ def show_prompt(title, prompt_text):
     st.text_area(
         label="",
         value=prompt_text,
-        height=380,
+        height=340,
         help="Sélectionnez tout (Ctrl+A) puis copiez (Ctrl+C) pour coller dans une IA."
     )
 
@@ -810,60 +1272,60 @@ def show_prompt(title, prompt_text):
 st.markdown("""
 <div class="afd-header">
     <h1>🌍 Outil de collecte de données — DER</h1>
-    <p>Collecte automatique · Sources officielles · Prompt IA par pilier</p>
+    <p>Collecte automatique · Sources officielles · Indicateurs classifiés · Codes couleur · Prompt IA par pilier</p>
 </div>
 """, unsafe_allow_html=True)
 
-country_options = dict(sorted({info["name"]: key for key, info in COUNTRY_MAPPING.items()}.items()))
-selected_name = st.selectbox("Sélectionner un pays", options=list(country_options.keys()))
+col_sel, col_btn = st.columns([3, 1])
+with col_sel:
+    country_options = dict(sorted({info["name"]: key for key, info in COUNTRY_MAPPING.items()}.items()))
+    selected_name = st.selectbox("🌐 Sélectionner un pays", options=list(country_options.keys()))
+with col_btn:
+    st.write("")
+    st.write("")
+    run = st.button("Récupérer les données →")
+
 selected_key = country_options[selected_name]
 country_info = COUNTRY_MAPPING[selected_key]
 wb_code = country_info["world_bank_code"]
 wb_url_base = f"https://data.worldbank.org/country/{country_info['wb_url_code']}"
 
-st.write("")
+if run:
+    with st.spinner("⏳ Collecte en cours — Freedom House, Banque mondiale, PNUD..."):
+        fh = fetch_freedom_house(country_info["freedom_house_slug"])
+        wb_info = fetch_wb_country_info(wb_code)
+        hdi = fetch_undp_hdi(country_info["name"])
 
-if st.button("Récupérer les données →"):
-
-    with st.spinner("Collecte en cours — Freedom House, Banque mondiale, PNUD..."):
-        fh       = fetch_freedom_house(country_info["freedom_house_slug"])
-        wb_info  = fetch_wb_country_info(wb_code)
-        hdi      = fetch_undp_hdi(country_info["name"])
-
-    with st.spinner("Construction Pilier 1..."):
+    with st.spinner("⚙️ Construction Pilier 1..."):
         pillar1_rows = build_pillar1(wb_code, wb_url_base, fh, wb_info, hdi)
 
-    with st.spinner("Construction Pilier 2..."):
+    with st.spinner("⚙️ Construction Pilier 2..."):
         pillar2_rows = build_pillar2(wb_code)
 
-    # ── Pilier 1
-    show_pillar(
+    # ── PILIER 1
+    show_pillar_v2(
         "📌 Pilier 1 — Environnement politique et socioéconomique",
-        "Freedom House · IDH · Statut de revenu · Gouvernance WGI · Emploi · Pauvreté · Éducation",
+        "Freedom House · IDH · Gouvernance WGI · Emploi · Pauvreté · Éducation",
         pillar1_rows,
-        "Freedom House · PNUD · Banque mondiale",
-        "https://data.worldbank.org"
+        THEMATIC_GROUPS_P1
     )
-
     prompt1 = build_prompt_pillar1(selected_name, pillar1_rows)
     show_prompt("Prompt IA — Pilier 1", prompt1)
 
     st.markdown("---")
 
-    # ── Pilier 2
-    show_pillar(
+    # ── PILIER 2
+    show_pillar_v2(
         "📈 Pilier 2 — Modèle économique et régime de croissance",
-        "Structure productive · Emploi sectoriel · Demande · Financement · Ouverture externe · Croissance",
+        "Structure productive · Emploi sectoriel · Demande · Financement · Ouverture · Croissance",
         pillar2_rows,
-        "Banque mondiale",
-        "https://data.worldbank.org"
+        THEMATIC_GROUPS_P2
     )
-
     prompt2 = build_prompt_pillar2(selected_name, pillar2_rows)
     show_prompt("Prompt IA — Pilier 2", prompt2)
 
     st.markdown(
-        f'<p class="footer-note">📅 Données collectées le {datetime.now().strftime("%d/%m/%Y à %H:%M")} — '
-        f'Sources officielles vérifiables.</p>',
+        f'<p class="footer-note">📅 Données collectées le {datetime.now().strftime("%d/%m/%Y à %H:%M")} '
+        f'· Sources officielles vérifiables · AFD — Direction des Études et Recherches</p>',
         unsafe_allow_html=True
     )
