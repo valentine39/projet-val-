@@ -3,14 +3,6 @@ from dataclasses import dataclass, field
 @dataclass
 class Config:
 
-    # ── Timor-Leste ───────────────────────────────────────────────
-    COUNTRY_CODE: str = "TLS"
-    COUNTRY_NAME: str = "Timor-Leste"
-
-    # ── Cache ─────────────────────────────────────────────────────
-    CACHE_TTL: int       = 3600    # 1h  → données fréquentes
-    CACHE_TTL_LONG: int  = 86400   # 24h → données stables
-
     # ── Banque Mondiale ───────────────────────────────────────────
     BM_BASE_URL: str = "https://api.worldbank.org/v2"
 
@@ -24,5 +16,14 @@ class Config:
         "POPULATION":   "SP.POP.TOTL",
     })
 
-# Instance globale
+    # ── Labels UI ─────────────────────────────────────────────────
+    LABELS: dict = field(default_factory=lambda: {
+        "PIB":          {"emoji": "📈", "label": "PIB Total", "unit": "Md$"},
+        "PIB_HABITANT": {"emoji": "👤", "label": "PIB/Habitant", "unit": "$"},
+        "CROISSANCE":   {"emoji": "📊", "label": "Croissance", "unit": "%"},
+        "INFLATION":    {"emoji": "💰", "label": "Inflation", "unit": "%"},
+        "CHOMAGE":      {"emoji": "💼", "label": "Chômage", "unit": "%"},
+        "POPULATION":   {"emoji": "👥", "label": "Population", "unit": "M"},
+    })
+
 CONFIG = Config()
