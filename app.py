@@ -747,7 +747,7 @@ def create_stacked_bar(categories, values_country, values_region, title):
 # Interface
 st.markdown("""
 <div class="main-header">
-    <h1>🌍 Dashboard Pays — Direction des Études et Recherches</h1>
+    <h1> Dashboard Pays — DER</h1>
     <p>Collecte automatisée · Visualisations · Comparaisons régionales · Export Excel</p>
 </div>
 """, unsafe_allow_html=True)
