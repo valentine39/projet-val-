@@ -893,7 +893,9 @@ if run:
 
 #**Sections plates** — aucun onglet, aucun menu. Tout est visible d'un seul défilement, organisé par thème avec un séparateur discret.
 
-**Signaux cohérents** — couleur de la valeur + flèche ↑ → ↓ adaptée à chaque indicateur (inflation basse = ↑ vert, chômage bas = ↑ vert, WGI positif = ↑ vert, etc.)": "mexico", "world_bank_code": "MEX", "wb_url_code": "MX"},
+# Signaux cohérents - couleur de la valeur + flèche (↑ → ↓) adaptée à chaque indicateur 
+# (inflation basse = ↑ vert, chômage bas = ↑ vert, WGI positif = ↑ vert, etc.)
+{"mexico": "mexico", "world_bank_code": "MEX", "wb_url_code": "MX"},
     "mozambique": {"name": "Mozambique", "freedom_house_slug": "mozambique", "world_bank_code": "MOZ", "wb_url_code": "MZ"},
     "niger": {"name": "Niger", "freedom_house_slug": "niger", "world_bank_code": "NER", "wb_url_code": "NE"},
     "nigeria": {"name": "Nigéria", "freedom_house_slug": "nigeria", "world_bank_code": "NGA", "wb_url_code": "NG"},
