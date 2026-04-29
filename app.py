@@ -1269,21 +1269,21 @@ Règles: pas de chiffres inventés · style institutionnel · ~450 mots
     
     st.info("📝 Secteur extractif (PIB, exports, recettes) · Tourisme · Prévisions FMI · Réformes récentes")
     
-   # Prompt P2
-st.markdown('<div class="prompt-box"><div class="prompt-title">🤖 Prompt IA — Pilier 2</div>', unsafe_allow_html=True)
-
-# Préparation des valeurs pour éviter les f-strings complexes
-conso_priv = wb_data.get('NE.CON.PRVT.ZS', {}).get('value')
-conso_pub = wb_data.get('NE.CON.GOVT.ZS', {}).get('value')
-invest = wb_data.get('NE.GDI.FTOT.ZS', {}).get('value')
-credit = wb_data.get('FS.AST.PRVT.GD.ZS', {}).get('value')
-
-conso_priv_str = f"{conso_priv:.1f}" if conso_priv else "N/D"
-conso_pub_str = f"{conso_pub:.1f}" if conso_pub else "N/D"
-invest_str = f"{invest:.1f}" if invest else "N/D"
-credit_str = f"{credit:.1f}" if credit else "N/D"
-
-prompt_p2 = f"""FICHE PAYS — {ci['name'].upper()}
+      # Prompt P2
+    st.markdown('<div class="prompt-box"><div class="prompt-title">🤖 Prompt IA — Pilier 2</div>', unsafe_allow_html=True)
+    
+    # Préparation des valeurs pour éviter les f-strings complexes
+    conso_priv = wb_data.get('NE.CON.PRVT.ZS', {}).get('value')
+    conso_pub = wb_data.get('NE.CON.GOVT.ZS', {}).get('value')
+    invest = wb_data.get('NE.GDI.FTOT.ZS', {}).get('value')
+    credit = wb_data.get('FS.AST.PRVT.GD.ZS', {}).get('value')
+    
+    conso_priv_str = f"{conso_priv:.1f}" if conso_priv else "N/D"
+    conso_pub_str = f"{conso_pub:.1f}" if conso_pub else "N/D"
+    invest_str = f"{invest:.1f}" if invest else "N/D"
+    credit_str = f"{credit:.1f}" if credit else "N/D"
+    
+    prompt_p2 = f"""FICHE PAYS — {ci['name'].upper()}
 PILIER 2 : MODÈLE ÉCONOMIQUE ET RÉGIME DE CROISSANCE
 {'='*70}
 
@@ -1338,12 +1338,12 @@ Partie 2 — Régime de croissance:
 
 Règles: pas de chiffres inventés · style institutionnel · ~550 mots
 """
-
-st.text_area("", value=prompt_p2, height=400, key="prompt_p2")
-if st.button("📋 Copier", key="copy_p2"):
-    st.success("✅ Copié!")
-
-st.markdown("</div>", unsafe_allow_html=True)
+    
+    st.text_area("", value=prompt_p2, height=400, key="prompt_p2")
+    if st.button("📋 Copier", key="copy_p2"):
+        st.success("✅ Copié!")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
     
     # Bilan
     total_indicators = total_p1 + total_p2
