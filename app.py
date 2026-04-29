@@ -1,41 +1,45 @@
 import streamlit as st
 from config import CONFIG
-from scrapers.banque_mondiale import BanqueMondialeScraper
+from services.data_service import DataService
 
 st.set_page_config(
-    page_title=f"{CONFIG.COUNTRY_NAME} — Fondamentaux Économiques",
+    page_title="Économie Mondiale",
     layout="wide"
 )
 
-st.title(f"🇹🇱 {CONFIG.COUNTRY_NAME}")
-st.markdown("### Fondamentaux Économiques")
+# ── Init ──────────────────────────────────────────────────────────
+service = DataService()
 
-# ── Test du scraper ───────────────────────────────────────────────
-st.markdown("---")
-st.markdown("### 🧪 Test Scraper Banque Mondiale")
+st.title("🌍 Fondamentaux Économiques")
 
-scraper = BanqueMondialeScraper()
+# ── Test liste des pays ───────────────────────────────────────────
+st.markdown("### 🧪 Test Liste des Pays")
 
-with st.spinner("🔄 Connexion à l'API Banque Mondiale..."):
-    data = scraper.fetch_all()
+with st.spinner("Chargement des pays..."):
+    countries = service.get_countries_list()
 
-# ── Résultats ─────────────────────────────────────────────────────
-if data:
-    st.success(f"✅ {len(data)} indicateurs récupérés !")
+if countries:
+    st.success(f"✅ {len(countries)} pays disponibles")
 
-    for nom, df in data.items():
-        with st.expander(f"📊 {nom} — {len(df)} années de données"):
-            col1, col2 = st.columns([2, 1])
+    # Sélecteur test
+    country_names = [c["name"] for c in countries]
+    selected_name = st.selectbox("Choisir un pays", country_names)
 
-            with col1:
-                st.dataframe(df, use_container_width=True)
+    # Retrouver le code du pays sélectionné
+    selected = next(c for c in countries if c["name"] == selected_name)
+    st.info(f"Code : `{selected['code']}` | Région : {selected['region']}")
 
-            with col2:
-                if not df.empty:
-                    derniere = df.iloc[-1]
-                    st.metric(
-                        label=f"Dernière valeur ({int(derniere['année'])})",
-                        value=f"{derniere['valeur']:,.2f}"
-                    )
+    # ── Test chargement données ───────────────────────────────────
+    if st.button("📊 Charger les données"):
+        with st.spinner(f"Chargement des données pour {selected_name}..."):
+            data = service.get_country_data(selected["code"])
+
+        if data:
+            st.success(f"✅ {len(data)} indicateurs récupérés !")
+            for nom, df in data.items():
+                with st.expander(f"📈 {nom}"):
+                    st.dataframe(df, use_container_width=True)
+        else:
+            st.warning("⚠️ Aucune donnée disponible pour ce pays")
 else:
-    st.error("❌ Aucune donnée récupérée — Vérifiez votre connexion")
+    st.error("❌ Impossible de charger la liste des pays")
