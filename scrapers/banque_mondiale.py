@@ -7,8 +7,9 @@ class BanqueMondialeScraper(BaseScraper):
     def __init__(self):
         super().__init__(base_url=CONFIG.BM_BASE_URL)
 
-    def fetch(self, indicator: str, years: int = 10) -> pd.DataFrame:
-        endpoint = f"/country/{CONFIG.COUNTRY_CODE}/indicator/{indicator}"
+    def fetch(self, indicator: str, country_code: str, years: int = 10) -> pd.DataFrame:
+        # ⭐ country_code en paramètre maintenant
+        endpoint = f"/country/{country_code}/indicator/{indicator}"
         params = {
             "format": "json",
             "per_page": years,
@@ -17,7 +18,6 @@ class BanqueMondialeScraper(BaseScraper):
 
         raw = self.get(endpoint, params=params)
 
-        # L'API retourne [metadata, data]
         if not raw or len(raw) < 2:
             return pd.DataFrame()
 
@@ -32,11 +32,11 @@ class BanqueMondialeScraper(BaseScraper):
         df = pd.DataFrame(records).sort_values("année").reset_index(drop=True)
         return df
 
-    def fetch_all(self) -> dict:
-        """Récupère tous les indicateurs configurés"""
+    def fetch_all(self, country_code: str) -> dict:
+        # ⭐ country_code en paramètre
         results = {}
         for nom, code in CONFIG.INDICATORS.items():
-            df = self.fetch(code)
+            df = self.fetch(code, country_code)
             if not df.empty:
                 results[nom] = df
         return results
