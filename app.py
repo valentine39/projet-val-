@@ -6,9 +6,12 @@ import pandas as pd
 from datetime import datetime
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import plotly.graph_objects as go
+import plotly.express as px
+from fpdf import FPDF
 
 st.set_page_config(
-    page_title="Outil de collecte de données - DER",
+    page_title="Dashboard pays - DER",
     page_icon="🌍",
     layout="wide"
 )
@@ -20,245 +23,423 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-html, body, [class*="css"] {
+* {
     font-family: "Inter", sans-serif;
-    color: #1e293b;
 }
-.stApp { background-color: #f1f5f9; }
-.main .block-container {
-    padding-top: 1.5rem;
-    padding-bottom: 3rem;
-    max-width: 1200px;
+
+.stApp {
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
 }
 
 /* HEADER */
-.afd-header {
-    background: #003189;
-    padding: 20px 28px;
-    border-radius: 10px;
-    margin-bottom: 28px;
+.main-header {
+    background: linear-gradient(135deg, #003189 0%, #0047bb 100%);
+    padding: 32px 40px;
+    border-radius: 16px;
+    margin-bottom: 32px;
+    box-shadow: 0 8px 24px rgba(0,49,137,0.15);
 }
-.afd-header h1 {
-    color: #fff !important;
-    font-size: 19px;
+.main-header h1 {
+    color: white !important;
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+}
+.main-header p {
+    color: #93b4e8;
+    font-size: 14px;
     margin: 0;
-    font-weight: 600;
 }
-.afd-header p { color: #93b4e8; font-size: 12px; margin: 5px 0 0 0; }
 
-/* PILLAR */
-.pillar-header {
-    font-size: 16px;
+/* COUNTRY CARD */
+.country-card {
+    background: white;
+    padding: 24px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    margin-bottom: 32px;
+}
+.country-name {
+    font-size: 32px;
     font-weight: 700;
     color: #003189;
-    margin: 32px 0 8px 0;
+    margin-bottom: 12px;
 }
-.pillar-sub {
-    font-size: 12px;
+.country-meta {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    font-size: 14px;
     color: #64748b;
-    margin-bottom: 20px;
+}
+.country-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.country-meta-label {
+    font-weight: 600;
+    color: #475569;
 }
 
-/* SUMMARY */
-.summary-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 12px;
-    margin-bottom: 16px;
+/* PILLAR */
+.pillar-divider {
+    background: white;
+    padding: 20px 32px;
+    border-radius: 12px;
+    margin: 48px 0 32px 0;
+    border-left: 6px solid #003189;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
-.s-card {
-    background: #fff;
-    border-radius: 8px;
-    padding: 16px;
-    border-top: 3px solid #003189;
-}
-.s-val {
+.pillar-title {
     font-size: 24px;
     font-weight: 700;
     color: #003189;
+    margin: 0 0 8px 0;
 }
-.s-lbl {
-    font-size: 11px;
-    color: #94a3b8;
+.pillar-subtitle {
+    font-size: 14px;
+    color: #64748b;
+    margin: 0;
+}
+.pillar-stats {
+    display: flex;
+    gap: 32px;
+    margin-top: 16px;
+    font-size: 13px;
+}
+.pillar-stat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.pillar-stat-val {
+    font-weight: 700;
+    font-size: 18px;
+}
+
+/* SECTION */
+.section-header {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 32px 0 16px 0;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+/* KPI CARDS */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+}
+.kpi-card {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border-top: 4px solid #e2e8f0;
+    position: relative;
+}
+.kpi-card.green { border-top-color: #10b981; }
+.kpi-card.orange { border-top-color: #f59e0b; }
+.kpi-card.red { border-top-color: #ef4444; }
+.kpi-card.grey { border-top-color: #94a3b8; }
+
+.kpi-label {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    margin-top: 4px;
+    margin-bottom: 12px;
 }
-
-/* LEGEND */
-.legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px;
-    margin-bottom: 20px;
-    padding: 12px;
-    background: #fff;
-    border-radius: 8px;
-    font-size: 11px;
-    align-items: center;
-}
-.legend-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-.ldot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-}
-
-/* THEME */
-.theme-wrap {
-    background: #fff;
-    border-radius: 8px;
-    padding: 20px;
-    margin-bottom: 16px;
-    border-left: 4px solid #003189;
-}
-.theme-title {
-    font-size: 14px;
+.kpi-value {
+    font-size: 32px;
     font-weight: 700;
-    margin-bottom: 16px;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+.kpi-value.green { color: #10b981; }
+.kpi-value.orange { color: #f59e0b; }
+.kpi-value.red { color: #ef4444; }
+.kpi-value.grey { color: #94a3b8; }
+
+.kpi-unit {
+    font-size: 13px;
+    color: #94a3b8;
+    font-weight: 500;
+}
+.kpi-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #f1f5f9;
+    font-size: 11px;
+    color: #94a3b8;
+}
+.kpi-trend {
+    font-weight: 700;
+    font-size: 14px;
+}
+.kpi-comparison {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 8px;
+    padding: 6px 10px;
+    background: #f8fafc;
+    border-radius: 6px;
 }
 
-/* INDICATOR ROW */
-.ind-row {
-    display: grid;
-    grid-template-columns: 2fr auto auto auto 1fr auto;
-    gap: 12px;
-    padding: 10px 0;
-    border-bottom: 1px solid #f1f5f9;
-    align-items: center;
-    font-size: 12px;
+/* GAUGE */
+.gauge-container {
+    background: white;
+    padding: 16px 20px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
-.ind-row:last-child { border-bottom: none; }
-.ind-lbl { color: #475569; font-weight: 500; }
-.ind-badge {
-    padding: 4px 12px;
-    border-radius: 6px;
+.gauge-label {
+    font-size: 13px;
     font-weight: 600;
-    color: #fff;
+    color: #475569;
+    margin-bottom: 8px;
+}
+.gauge-bar {
+    position: relative;
+    height: 32px;
+    background: #f1f5f9;
+    border-radius: 8px;
+    overflow: hidden;
+}
+.gauge-fill {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 12px;
+    font-weight: 700;
+    font-size: 13px;
+    color: white;
+    transition: width 0.6s ease;
+}
+.gauge-fill.green { background: linear-gradient(90deg, #10b981, #059669); }
+.gauge-fill.orange { background: linear-gradient(90deg, #f59e0b, #d97706); }
+.gauge-fill.red { background: linear-gradient(90deg, #ef4444, #dc2626); }
+.gauge-fill.grey { background: linear-gradient(90deg, #94a3b8, #64748b); }
+
+.gauge-compare {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 2px;
+    background: #1e293b;
+    opacity: 0.4;
+}
+.gauge-compare::after {
+    content: attr(data-label);
+    position: absolute;
+    top: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: #64748b;
     white-space: nowrap;
 }
-.ind-unit { color: #94a3b8; font-size: 11px; }
-.ind-year { color: #cbd5e1; font-size: 11px; }
-.ind-src { font-size: 11px; color: #94a3b8; text-align: right; }
-.ind-src a { color: #003189; text-decoration: none; }
-.ind-src a:hover { text-decoration: underline; }
-.ind-note { color: #f59e0b; font-size: 10px; font-style: italic; }
 
-/* BADGES */
-.bg-green  { background: #15803d; }
-.bg-lgreen { background: #16a34a; }
-.bg-orange { background: #c2410c; }
-.bg-red    { background: #b91c1c; }
-.bg-blue   { background: #1d4ed8; }
-.bg-purple { background: #7c3aed; }
-.bg-grey   { background: #94a3b8; }
+/* TOGGLE */
+.toggle-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding: 12px 16px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.toggle-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+}
 
 /* PROMPT */
+.prompt-box {
+    background: white;
+    padding: 24px;
+    border-radius: 12px;
+    margin: 32px 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
 .prompt-title {
-    font-size: 13px;
+    font-size: 16px;
     font-weight: 700;
     color: #003189;
-    margin: 28px 0 10px 0;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.prompt-text {
+    background: #f8fafc;
+    padding: 16px;
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #1e293b;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    border: 1px solid #e2e8f0;
+}
+
+/* BUTTONS */
+.export-buttons {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin: 48px 0;
+}
+.export-btn {
+    background: linear-gradient(135deg, #003189, #0047bb);
+    color: white;
+    padding: 14px 32px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,49,137,0.2);
+    transition: all 0.3s;
+}
+.export-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0,49,137,0.3);
 }
 
 /* FOOTER */
-.footer-note {
-    font-size: 11px;
-    color: #cbd5e1;
-    margin-top: 36px;
+.footer {
     text-align: center;
+    padding: 24px;
+    color: #94a3b8;
+    font-size: 12px;
     border-top: 1px solid #e2e8f0;
-    padding-top: 10px;
+    margin-top: 48px;
 }
 
-/* BUTTON */
-div[data-testid="stButton"] button {
-    background: #003189;
-    color: white;
-    font-family: "Inter", sans-serif;
-    font-weight: 600;
-    font-size: 13px;
-    border: none;
-    border-radius: 8px;
-    padding: 10px 24px;
-    width: 100%;
-    transition: background 0.2s;
+/* CHART CONTAINER */
+.chart-container {
+    background: white;
+    padding: 24px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
-div[data-testid="stButton"] button:hover { background: #1d4ed8; }
+.chart-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 16px;
+}
+
+/* LOADING */
+.loading {
+    text-align: center;
+    padding: 48px;
+    color: #64748b;
+}
 </style>
 """, unsafe_allow_html=True)
 
 # Pays
 COUNTRY_MAPPING = {
-    "afghanistan": {"name": "Afghanistan", "freedom_house_slug": "afghanistan", "world_bank_code": "AFG", "wb_url_code": "AF"},
-    "afrique_du_sud": {"name": "Afrique du Sud", "freedom_house_slug": "south-africa", "world_bank_code": "ZAF", "wb_url_code": "ZA"},
-    "albanie": {"name": "Albanie", "freedom_house_slug": "albania", "world_bank_code": "ALB", "wb_url_code": "AL"},
-    "algerie": {"name": "Algérie", "freedom_house_slug": "algeria", "world_bank_code": "DZA", "wb_url_code": "DZ"},
-    "angola": {"name": "Angola", "freedom_house_slug": "angola", "world_bank_code": "AGO", "wb_url_code": "AO"},
-    "argentine": {"name": "Argentine", "freedom_house_slug": "argentina", "world_bank_code": "ARG", "wb_url_code": "AR"},
-    "armenie": {"name": "Arménie", "freedom_house_slug": "armenia", "world_bank_code": "ARM", "wb_url_code": "AM"},
-    "azerbaijan": {"name": "Azerbaïdjan", "freedom_house_slug": "azerbaijan", "world_bank_code": "AZE", "wb_url_code": "AZ"},
-    "bangladesh": {"name": "Bangladesh", "freedom_house_slug": "bangladesh", "world_bank_code": "BGD", "wb_url_code": "BD"},
-    "benin": {"name": "Bénin", "freedom_house_slug": "benin", "world_bank_code": "BEN", "wb_url_code": "BJ"},
-    "bolivie": {"name": "Bolivie", "freedom_house_slug": "bolivia", "world_bank_code": "BOL", "wb_url_code": "BO"},
-    "bresil": {"name": "Brésil", "freedom_house_slug": "brazil", "world_bank_code": "BRA", "wb_url_code": "BR"},
-    "burkina_faso": {"name": "Burkina Faso", "freedom_house_slug": "burkina-faso", "world_bank_code": "BFA", "wb_url_code": "BF"},
-    "burundi": {"name": "Burundi", "freedom_house_slug": "burundi", "world_bank_code": "BDI", "wb_url_code": "BI"},
-    "cambodge": {"name": "Cambodge", "freedom_house_slug": "cambodia", "world_bank_code": "KHM", "wb_url_code": "KH"},
-    "cameroun": {"name": "Cameroun", "freedom_house_slug": "cameroon", "world_bank_code": "CMR", "wb_url_code": "CM"},
-    "chili": {"name": "Chili", "freedom_house_slug": "chile", "world_bank_code": "CHL", "wb_url_code": "CL"},
-    "chine": {"name": "Chine", "freedom_house_slug": "china", "world_bank_code": "CHN", "wb_url_code": "CN"},
-    "colombie": {"name": "Colombie", "freedom_house_slug": "colombia", "world_bank_code": "COL", "wb_url_code": "CO"},
-    "cote_ivoire": {"name": "Côte d'Ivoire", "freedom_house_slug": "cote-divoire", "world_bank_code": "CIV", "wb_url_code": "CI"},
-    "egypte": {"name": "Égypte", "freedom_house_slug": "egypt", "world_bank_code": "EGY", "wb_url_code": "EG"},
-    "ethiopie": {"name": "Éthiopie", "freedom_house_slug": "ethiopia", "world_bank_code": "ETH", "wb_url_code": "ET"},
-    "ghana": {"name": "Ghana", "freedom_house_slug": "ghana", "world_bank_code": "GHA", "wb_url_code": "GH"},
-    "guinee": {"name": "Guinée", "freedom_house_slug": "guinea", "world_bank_code": "GIN", "wb_url_code": "GN"},
-    "haiti": {"name": "Haïti", "freedom_house_slug": "haiti", "world_bank_code": "HTI", "wb_url_code": "HT"},
-    "inde": {"name": "Inde", "freedom_house_slug": "india", "world_bank_code": "IND", "wb_url_code": "IN"},
-    "indonesie": {"name": "Indonésie", "freedom_house_slug": "indonesia", "world_bank_code": "IDN", "wb_url_code": "ID"},
-    "irak": {"name": "Irak", "freedom_house_slug": "iraq", "world_bank_code": "IRQ", "wb_url_code": "IQ"},
-    "kenya": {"name": "Kenya", "freedom_house_slug": "kenya", "world_bank_code": "KEN", "wb_url_code": "KE"},
-    "liban": {"name": "Liban", "freedom_house_slug": "lebanon", "world_bank_code": "LBN", "wb_url_code": "LB"},
-    "madagascar": {"name": "Madagascar", "freedom_house_slug": "madagascar", "world_bank_code": "MDG", "wb_url_code": "MG"},
-    "mali": {"name": "Mali", "freedom_house_slug": "mali", "world_bank_code": "MLI", "wb_url_code": "ML"},
-    "maroc": {"name": "Maroc", "freedom_house_slug": "morocco", "world_bank_code": "MAR", "wb_url_code": "MA"},
-    "mauritanie": {"name": "Mauritanie", "freedom_house_slug": "mauritania", "world_bank_code": "MRT", "wb_url_code": "MR"},
-    "mexique": {"name": "Mexique", "freedom_house_slug": "mexico", "world_bank_code": "MEX", "wb_url_code": "MX"},
-    "mozambique": {"name": "Mozambique", "freedom_house_slug": "mozambique", "world_bank_code": "MOZ", "wb_url_code": "MZ"},
-    "niger": {"name": "Niger", "freedom_house_slug": "niger", "world_bank_code": "NER", "wb_url_code": "NE"},
-    "nigeria": {"name": "Nigéria", "freedom_house_slug": "nigeria", "world_bank_code": "NGA", "wb_url_code": "NG"},
-    "pakistan": {"name": "Pakistan", "freedom_house_slug": "pakistan", "world_bank_code": "PAK", "wb_url_code": "PK"},
-    "perou": {"name": "Pérou", "freedom_house_slug": "peru", "world_bank_code": "PER", "wb_url_code": "PE"},
-    "philippines": {"name": "Philippines", "freedom_house_slug": "philippines", "world_bank_code": "PHL", "wb_url_code": "PH"},
-    "rdc": {"name": "RDC (Congo-Kinshasa)", "freedom_house_slug": "democratic-republic-of-congo", "world_bank_code": "COD", "wb_url_code": "CD"},
-    "rwanda": {"name": "Rwanda", "freedom_house_slug": "rwanda", "world_bank_code": "RWA", "wb_url_code": "RW"},
-    "senegal": {"name": "Sénégal", "freedom_house_slug": "senegal", "world_bank_code": "SEN", "wb_url_code": "SN"},
-    "somalie": {"name": "Somalie", "freedom_house_slug": "somalia", "world_bank_code": "SOM", "wb_url_code": "SO"},
-    "soudan": {"name": "Soudan", "freedom_house_slug": "sudan", "world_bank_code": "SDN", "wb_url_code": "SD"},
-    "tanzanie": {"name": "Tanzanie", "freedom_house_slug": "tanzania", "world_bank_code": "TZA", "wb_url_code": "TZ"},
-    "tchad": {"name": "Tchad", "freedom_house_slug": "chad", "world_bank_code": "TCD", "wb_url_code": "TD"},
-    "tunisie": {"name": "Tunisie", "freedom_house_slug": "tunisia", "world_bank_code": "TUN", "wb_url_code": "TN"},
-    "turquie": {"name": "Turquie", "freedom_house_slug": "turkey", "world_bank_code": "TUR", "wb_url_code": "TR"},
-    "ukraine": {"name": "Ukraine", "freedom_house_slug": "ukraine", "world_bank_code": "UKR", "wb_url_code": "UA"},
-    "vietnam": {"name": "Vietnam", "freedom_house_slug": "vietnam", "world_bank_code": "VNM", "wb_url_code": "VN"},
-    "yemen": {"name": "Yémen", "freedom_house_slug": "yemen", "world_bank_code": "YEM", "wb_url_code": "YE"},
-    "zambie": {"name": "Zambie", "freedom_house_slug": "zambia", "world_bank_code": "ZMB", "wb_url_code": "ZM"},
-    "zimbabwe": {"name": "Zimbabwe", "freedom_house_slug": "zimbabwe", "world_bank_code": "ZWE", "wb_url_code": "ZW"},
+    "afghanistan": {"name": "Afghanistan", "freedom_house_slug": "afghanistan", "world_bank_code": "AFG", "wb_url_code": "AF", "flag": "🇦🇫"},
+    "afrique_du_sud": {"name": "Afrique du Sud", "freedom_house_slug": "south-africa", "world_bank_code": "ZAF", "wb_url_code": "ZA", "flag": "🇿🇦"},
+    "algerie": {"name": "Algérie", "freedom_house_slug": "algeria", "world_bank_code": "DZA", "wb_url_code": "DZ", "flag": "🇩🇿"},
+    "benin": {"name": "Bénin", "freedom_house_slug": "benin", "world_bank_code": "BEN", "wb_url_code": "BJ", "flag": "🇧🇯"},
+    "burkina_faso": {"name": "Burkina Faso", "freedom_house_slug": "burkina-faso", "world_bank_code": "BFA", "wb_url_code": "BF", "flag": "🇧🇫"},
+    "cameroun": {"name": "Cameroun", "freedom_house_slug": "cameroon", "world_bank_code": "CMR", "wb_url_code": "CM", "flag": "🇨🇲"},
+    "cote_ivoire": {"name": "Côte d'Ivoire", "freedom_house_slug": "cote-divoire", "world_bank_code": "CIV", "wb_url_code": "CI", "flag": "🇨🇮"},
+    "egypte": {"name": "Égypte", "freedom_house_slug": "egypt", "world_bank_code": "EGY", "wb_url_code": "EG", "flag": "🇪🇬"},
+    "ethiopie": {"name": "Éthiopie", "freedom_house_slug": "ethiopia", "world_bank_code": "ETH", "wb_url_code": "ET", "flag": "🇪🇹"},
+    "ghana": {"name": "Ghana", "freedom_house_slug": "ghana", "world_bank_code": "GHA", "wb_url_code": "GH", "flag": "🇬🇭"},
+    "kenya": {"name": "Kenya", "freedom_house_slug": "kenya", "world_bank_code": "KEN", "wb_url_code": "KE", "flag": "🇰🇪"},
+    "madagascar": {"name": "Madagascar", "freedom_house_slug": "madagascar", "world_bank_code": "MDG", "wb_url_code": "MG", "flag": "🇲🇬"},
+    "mali": {"name": "Mali", "freedom_house_slug": "mali", "world_bank_code": "MLI", "wb_url_code": "ML", "flag": "🇲🇱"},
+    "maroc": {"name": "Maroc", "freedom_house_slug": "morocco", "world_bank_code": "MAR", "wb_url_code": "MA", "flag": "🇲🇦"},
+    "niger": {"name": "Niger", "freedom_house_slug": "niger", "world_bank_code": "NER", "wb_url_code": "NE", "flag": "🇳🇪"},
+    "nigeria": {"name": "Nigéria", "freedom_house_slug": "nigeria", "world_bank_code": "NGA", "wb_url_code": "NG", "flag": "🇳🇬"},
+    "senegal": {"name": "Sénégal", "freedom_house_slug": "senegal", "world_bank_code": "SEN", "wb_url_code": "SN", "flag": "🇸🇳"},
+    "tanzanie": {"name": "Tanzanie", "freedom_house_slug": "tanzania", "world_bank_code": "TZA", "wb_url_code": "TZ", "flag": "🇹🇿"},
+    "tchad": {"name": "Tchad", "freedom_house_slug": "chad", "world_bank_code": "TCD", "wb_url_code": "TD", "flag": "🇹🇩"},
+    "tunisie": {"name": "Tunisie", "freedom_house_slug": "tunisia", "world_bank_code": "TUN", "wb_url_code": "TN", "flag": "🇹🇳"},
 }
 
 INCOME_LABELS = {
-    "LIC": "PFR - Faible revenu",
-    "LMC": "PRITI - Rev. interm. inf.",
-    "UMC": "PRITS - Rev. interm. sup.",
-    "HIC": "PRE - Revenu élevé",
+    "LIC": "Faible revenu",
+    "LMC": "Revenu intermédiaire inférieur",
+    "UMC": "Revenu intermédiaire supérieur",
+    "HIC": "Revenu élevé",
     "INX": "Non classifié",
+}
+
+# Moyennes régionales (exemples - à ajuster)
+REGIONAL_AVERAGES = {
+    "Sub-Saharan Africa": {
+        "gdp_growth": 3.5,
+        "inflation": 8.2,
+        "unemployment": 7.5,
+        "hdi": 0.547,
+        "gini": 43.5,
+        "poverty": 35.2,
+        "primary_school": 95.0,
+        "secondary_school": 48.0,
+        "tertiary_school": 9.0,
+        "agriculture_gdp": 16.5,
+        "industry_gdp": 26.8,
+        "services_gdp": 56.7,
+        "agriculture_emp": 52.0,
+        "industry_emp": 11.0,
+        "services_emp": 37.0,
+        "consumption_private": 68.0,
+        "consumption_public": 14.0,
+        "investment": 22.0,
+        "credit_private": 35.0,
+        "exports": 28.0,
+        "imports": 32.0,
+        "fdi": 2.5,
+        "remittances": 3.2,
+    },
+    "Middle East & North Africa": {
+        "gdp_growth": 2.8,
+        "inflation": 12.5,
+        "unemployment": 11.2,
+        "hdi": 0.703,
+        "gini": 37.5,
+        "poverty": 5.5,
+        "primary_school": 98.0,
+        "secondary_school": 78.0,
+        "tertiary_school": 35.0,
+        "agriculture_gdp": 8.5,
+        "industry_gdp": 38.2,
+        "services_gdp": 53.3,
+        "agriculture_emp": 25.0,
+        "industry_emp": 28.0,
+        "services_emp": 47.0,
+        "consumption_private": 58.0,
+        "consumption_public": 18.0,
+        "investment": 26.0,
+        "credit_private": 55.0,
+        "exports": 35.0,
+        "imports": 38.0,
+        "fdi": 1.8,
+        "remittances": 4.5,
+    },
 }
 
 # Utilitaires
@@ -268,251 +449,56 @@ def flag_old(year):
     try:
         age = CURRENT_YEAR - int(year)
         if age > OLD_DATA_THRESHOLD:
-            return f"donnée ancienne ({age} ans)"
-    except Exception:
+            return f"Donnée ancienne ({age} ans)"
+    except:
         pass
     return ""
 
-def make_row(label, value, unit, year, source, url="", note=None):
-    note_val = flag_old(year) if note is None else (note or "")
-    return {
-        "label": label,
-        "value": str(value) if value is not None else "N/D",
-        "unit": unit or "",
-        "year": str(year) if year else "—",
-        "source": source or "",
-        "url": url or "",
-        "note": note_val or "",
-    }
-
-# Codes couleur
-def badge_class(label, value):
-    NA_VALS = {"N/D", "—", "À compléter", "Non disponible", "Indisponible", ""}
-    if str(value).strip() in NA_VALS:
-        return "bg-grey"
-
-    lbl = label.lower()
-    vs = str(value).strip()
-
-    # Freedom House statut
-    if "statut" in lbl and "freedom" in lbl:
-        return {"Free": "bg-green", "Partly Free": "bg-orange", "Not Free": "bg-red"}.get(vs, "bg-grey")
-
-    # Freedom House score /100
-    if "freedom house" in lbl and "score" in lbl:
-        try:
-            s = int(vs.split("/")[0])
-            return "bg-green" if s >= 70 else ("bg-orange" if s >= 40 else "bg-red")
-        except: pass
-
-    # Droits politiques /40
-    if "droits politiques" in lbl:
-        try:
-            s = int(vs.split("/")[0])
-            return "bg-green" if s >= 28 else ("bg-orange" if s >= 15 else "bg-red")
-        except: pass
-
-    # Libertés civiles /60
-    if "libertés civiles" in lbl:
-        try:
-            s = int(vs.split("/")[0])
-            return "bg-green" if s >= 42 else ("bg-orange" if s >= 22 else "bg-red")
-        except: pass
-
-    # IDH
-    if "idh" in lbl and "valeur" in lbl:
-        try:
-            v = float(vs)
-            if v >= 0.800: return "bg-green"
-            if v >= 0.700: return "bg-lgreen"
-            if v >= 0.550: return "bg-orange"
-            return "bg-red"
-        except: pass
-
-    # WGI
-    if "wgi" in lbl:
-        try:
-            v = float(vs)
-            return "bg-green" if v >= 0.5 else ("bg-orange" if v >= -0.3 else "bg-red")
-        except: pass
-
-    # Gini
-    if "gini" in lbl:
-        try:
-            v = float(vs)
-            return "bg-green" if v < 32 else ("bg-orange" if v < 45 else "bg-red")
-        except: pass
-
-    # Pauvreté
-    if "pauvreté" in lbl:
-        try:
-            v = float(vs.replace("%", ""))
-            return "bg-green" if v < 5 else ("bg-orange" if v < 20 else "bg-red")
-        except: pass
-
-    # PIB/habitant
-    if "pib" in lbl and "habitant" in lbl:
-        try:
-            v = float(vs.replace("$", "").replace(",", ""))
-            return "bg-green" if v > 10000 else ("bg-orange" if v > 3000 else "bg-red")
-        except: pass
-
-    # Croissance
-    if "croissance" in lbl:
-        try:
-            v = float(vs.replace(",", "."))
-            if v > 5: return "bg-green"
-            if v > 2: return "bg-lgreen"
-            if v > 0: return "bg-orange"
-            return "bg-red"
-        except: pass
-
-    # Inflation
-    if "inflation" in lbl:
-        try:
-            v = float(vs.replace(",", "."))
-            return "bg-green" if v < 4 else ("bg-orange" if v < 10 else "bg-red")
-        except: pass
-
-    # Chômage
-    if "chômage" in lbl:
-        try:
-            v = float(vs.replace(",", "."))
-            return "bg-green" if v < 10 else ("bg-orange" if v < 25 else "bg-red")
-        except: pass
-
-    # Emploi / scolarisation
-    if any(k in lbl for k in ["emploi", "scolarisation"]):
-        try:
-            v = float(vs.replace(",", "."))
-            return "bg-green" if v > 75 else ("bg-orange" if v > 50 else "bg-red")
-        except: pass
-
-    # Catégoriel
-    if any(k in lbl for k in ["statut de revenu", "région"]):
-        return "bg-purple"
-
-    # Soldes, flux
-    if any(k in lbl for k in ["ide", "solde", "exportations", "importations", "transferts"]):
-        return "bg-blue"
-
-    # Tenter numérique
+def get_signal(value, thresholds):
+    """
+    thresholds = {"high": X, "low": Y, "reverse": bool}
+    reverse=True : valeur basse = bon (ex: inflation, chômage)
+    """
+    if value is None or str(value).strip() in ["N/D", "—", "À compléter", "Non disponible", "Indisponible", ""]:
+        return "grey"
+    
     try:
-        float(vs.replace(",", ".").replace("$", "").replace("%", "").replace(" ", ""))
-        return "bg-blue"
+        v = float(str(value).replace("$", "").replace(",", "").replace("%", ""))
+        high = thresholds.get("high")
+        low = thresholds.get("low")
+        reverse = thresholds.get("reverse", False)
+        
+        if reverse:
+            if v < low: return "green"
+            if v < high: return "orange"
+            return "red"
+        else:
+            if v >= high: return "green"
+            if v >= low: return "orange"
+            return "red"
     except:
-        return "bg-grey"
+        return "grey"
 
-def trend_icon(label, value):
-    bc = badge_class(label, value)
-    return {"bg-green": "▲", "bg-lgreen": "↗", "bg-orange": "→", "bg-red": "▼"}.get(bc, "")
+def get_trend_icon(value, prev_value, reverse=False):
+    """Retourne ↑ ↓ → selon évolution"""
+    if value is None or prev_value is None:
+        return "→"
+    try:
+        v = float(str(value).replace("$", "").replace(",", "").replace("%", ""))
+        pv = float(str(prev_value).replace("$", "").replace(",", "").replace("%", ""))
+        diff = v - pv
+        
+        if abs(diff) < 0.1:
+            return "→"
+        
+        if reverse:
+            return "↓" if diff > 0 else "↑"
+        else:
+            return "↑" if diff > 0 else "↓"
+    except:
+        return "→"
 
-# Groupes thématiques
-GROUPS_P1 = [
-    ("🗳️ Régime politique & libertés", [
-        "Freedom House — Score", "Freedom House — Statut", "Freedom House",
-        "Droits politiques", "Libertés civiles", "EIU — Democracy Index",
-    ]),
-    ("🏛️ Gouvernance (WGI)", [
-        "WGI — Expression & responsabilité",
-        "WGI — Stabilité politique & absence de violence",
-        "WGI — Efficacité gouvernementale",
-        "WGI — Qualité réglementaire",
-        "WGI — État de droit",
-        "WGI — Contrôle de la corruption",
-    ]),
-    ("💰 Développement & inégalités", [
-        "IDH — Valeur", "IDH — Rang mondial", "IDH",
-        "Statut de revenu (BM)", "Région BM",
-        "PIB / habitant", "Indice de Gini", "Taux de pauvreté (< 2,15 $/j)",
-    ]),
-    ("👷 Marché du travail", [
-        "Taux d'emploi total", "Chômage des jeunes (15-24 ans)",
-        "Taux d'emploi des femmes", "Taux d'informalité",
-    ]),
-    ("📚 Éducation", [
-        "Scolarisation primaire (taux brut)",
-        "Scolarisation secondaire (taux brut)",
-        "Scolarisation tertiaire (taux brut)",
-    ]),
-]
-
-GROUPS_P2 = [
-    ("📊 Macroéconomie", [
-        "PIB nominal total", "PIB par habitant",
-        "Croissance du PIB réel — dernière obs.",
-        "Croissance moyenne PIB réel depuis 2010",
-        "Croissance moyenne PIB réel — 10 dernières obs.",
-        "Inflation annuelle",
-    ]),
-    ("🏗️ Structure productive", [
-        "Agriculture — part du PIB", "Industrie — part du PIB",
-        "Manufacturier — part du PIB", "Services — part du PIB",
-        "Part secteur extractif — PIB", "Part du tourisme dans le PIB",
-    ]),
-    ("👥 Emploi sectoriel", [
-        "Emploi agricole", "Emploi industriel", "Emploi dans les services",
-    ]),
-    ("💹 Demande & investissement", [
-        "Consommation privée", "Consommation publique",
-        "Formation brute de capital fixe", "Investissement privé",
-        "Crédit domestique secteur privé",
-    ]),
-    ("🌍 Ouverture externe", [
-        "Exportations biens et services", "Importations biens et services",
-        "Solde courant", "IDE entrants nets", "Transferts de migrants",
-    ]),
-    ("🔭 Perspectives", [
-        "Croissance potentielle FMI",
-        "Prévisions FMI (année en cours / N+1)",
-        "Réformes et chocs récents",
-        "Part secteur extractif — exportations",
-        "Part secteur extractif — recettes pub.",
-    ]),
-]
-
-THEME_COLORS = {
-    "🗳️ Régime politique & libertés":      "#dc2626",
-    "🏛️ Gouvernance (WGI)":                "#003189",
-    "💰 Développement & inégalités":        "#059669",
-    "👷 Marché du travail":                 "#d97706",
-    "📚 Éducation":                         "#7c3aed",
-    "📊 Macroéconomie":                     "#003189",
-    "🏗️ Structure productive":              "#d97706",
-    "👥 Emploi sectoriel":                  "#059669",
-    "💹 Demande & investissement":          "#0891b2",
-    "🌍 Ouverture externe":                 "#475569",
-    "🔭 Perspectives":                      "#7c3aed",
-}
-
-def group_rows(rows, groups):
-    label_to_group = {}
-    for gname, labels in groups:
-        for l in labels:
-            label_to_group[l] = gname
-
-    buckets = {g[0]: [] for g in groups}
-    other = []
-    used = set()
-
-    for r in rows:
-        lbl = r["label"]
-        g = label_to_group.get(lbl)
-        if g and lbl not in used:
-            buckets[g].append(r)
-            used.add(lbl)
-
-    for r in rows:
-        if r["label"] not in used:
-            other.append(r)
-            used.add(r["label"])
-
-    result = [(g, buckets[g]) for g, _ in groups if buckets[g]]
-    if other:
-        result.append(("📎 Autres", other))
-    return result
-
-# Collecte des données
+# Collecte données
 def fetch_freedom_house(slug, year=2026):
     url = f"https://freedomhouse.org/country/{slug}/freedom-world/{year}"
     try:
@@ -520,18 +506,26 @@ def fetch_freedom_house(slug, year=2026):
         r.raise_for_status()
         text = re.sub(r"\s+", " ", BeautifulSoup(r.text, "html.parser").get_text(" ", strip=True))
         res = {"status": None, "score": None, "pr_score": None, "cl_score": None, "year": year, "url": url, "error": None}
-        if re.search(r"\bNot Free\b", text):      res["status"] = "Not Free"
-        elif re.search(r"\bPartly Free\b", text): res["status"] = "Partly Free"
-        elif re.search(r"\bFree\b", text):        res["status"] = "Free"
+        
+        if re.search(r"\bNot Free\b", text):
+            res["status"] = "Not Free"
+        elif re.search(r"\bPartly Free\b", text):
+            res["status"] = "Partly Free"
+        elif re.search(r"\bFree\b", text):
+            res["status"] = "Free"
+        
         m = re.search(r"(?:Total Score and Status|score)\s+(\d{1,3})\s*/?\s*100", text, re.I)
-        if m: res["score"] = int(m.group(1))
-        else:
-            m2 = re.search(r"\b(\d{1,3})\s*/?\s*100\b", text)
-            if m2: res["score"] = int(m2.group(1))
+        if m:
+            res["score"] = int(m.group(1))
+        
         pr = re.search(r"Political Rights\s+(\d{1,2})\s*/?\s*40", text, re.I)
-        if pr: res["pr_score"] = int(pr.group(1))
+        if pr:
+            res["pr_score"] = int(pr.group(1))
+        
         cl = re.search(r"Civil Liberties\s+(\d{1,2})\s*/?\s*60", text, re.I)
-        if cl: res["cl_score"] = int(cl.group(1))
+        if cl:
+            res["cl_score"] = int(cl.group(1))
+        
         return res
     except Exception as e:
         return {"error": str(e), "url": url}
@@ -564,7 +558,8 @@ def fetch_wb_history(country_code, indicator_code, n=25):
         if obs.get("value") is not None:
             try:
                 rows.append({"year": int(obs["date"]), "value": float(obs["value"])})
-            except: pass
+            except:
+                pass
     rows.sort(key=lambda x: x["year"])
     return rows[-n:]
 
@@ -574,13 +569,14 @@ def fetch_wb_country_info(cc):
         return None
     c = data[1][0]
     return {
-        "income_code":  c.get("incomeLevel", {}).get("id", ""),
+        "income_code": c.get("incomeLevel", {}).get("id", ""),
         "income_label": c.get("incomeLevel", {}).get("value", ""),
-        "region":       c.get("region", {}).get("value", ""),
+        "region": c.get("region", {}).get("value", ""),
     }
 
 def latest(hist):
-    if not hist: return None, None
+    if not hist:
+        return None, None
     return hist[-1]["value"], hist[-1]["year"]
 
 def avg_since(hist, y0=2010):
@@ -601,12 +597,14 @@ def load_hdi_table():
         rows = []
         for _, row in df.iterrows():
             v = list(row.dropna())
-            if len(v) < 3: continue
+            if len(v) < 3:
+                continue
             try:
                 ri, hv = int(v[0]), float(v[2])
                 if 0 < hv <= 1:
                     rows.append({"rank": ri, "country": str(v[1]).strip(), "hdi": hv})
-            except: pass
+            except:
+                pass
         return pd.DataFrame(rows)
     except:
         return pd.DataFrame()
@@ -617,10 +615,6 @@ def fetch_hdi(name):
         "RDC (Congo-Kinshasa)": ["Congo (Democratic Republic of the)"],
         "Côte d'Ivoire": ["Côte d'Ivoire", "Cote d'Ivoire"],
         "Tanzanie": ["Tanzania (United Republic of)"],
-        "Bolivie": ["Bolivia (Plurinational State of)", "Bolivia"],
-        "Laos": ["Lao People's Democratic Republic"],
-        "Syrie": ["Syrian Arab Republic"],
-        "Vietnam": ["Viet Nam"],
     }
     try:
         df = load_hdi_table()
@@ -635,29 +629,47 @@ def fetch_hdi(name):
     except Exception as e:
         return {"value": None, "rank": None, "year": 2023, "url": src, "error": str(e)}
 
-# Codes WB à collecter
-WB_CODES_P1 = [
-    "NY.GDP.PCAP.CD", "SI.POV.GINI", "SI.POV.DDAY",
-    "VA.EST", "PV.EST", "GE.EST", "RQ.EST", "RL.EST", "CC.EST",
-    "SL.EMP.TOTL.SP.ZS", "SL.UEM.1524.ZS", "SL.EMP.TOTL.SP.FE.ZS", "SL.ISV.IFRM.ZS",
-    "SE.PRM.ENRR", "SE.SEC.ENRR", "SE.TER.ENRR",
-]
-
-WB_CODES_P2_LATEST = [
-    "NY.GDP.MKTP.CD", "NY.GDP.PCAP.CD", "FP.CPI.TOTL.ZG",
-    "NV.AGR.TOTL.ZS", "NV.IND.TOTL.ZS", "NV.IND.MANF.ZS", "NV.SRV.TOTL.ZS",
-    "SL.AGR.EMPL.ZS", "SL.IND.EMPL.ZS", "SL.SRV.EMPL.ZS",
-    "NE.CON.PRVT.ZS", "NE.CON.GOVT.ZS", "NE.GDI.FTOT.ZS", "NE.GDI.FPRV.ZS",
-    "BX.KLT.DINV.WD.GD.ZS", "BX.TRF.PWKR.DT.GD.ZS", "FS.AST.PRVT.GD.ZS",
-    "NE.EXP.GNFS.ZS", "NE.IMP.GNFS.ZS", "BN.CAB.XOKA.GD.ZS",
-]
+WB_CODES = {
+    "NY.GDP.PCAP.CD": "PIB/hab",
+    "NY.GDP.MKTP.KD.ZG": "Croissance",
+    "FP.CPI.TOTL.ZG": "Inflation",
+    "SI.POV.GINI": "Gini",
+    "SI.POV.DDAY": "Pauvreté",
+    "SL.UEM.TOTL.ZS": "Chômage",
+    "VA.EST": "WGI Voice",
+    "PV.EST": "WGI Stability",
+    "GE.EST": "WGI Effectiveness",
+    "RQ.EST": "WGI Regulatory",
+    "RL.EST": "WGI Rule of Law",
+    "CC.EST": "WGI Corruption",
+    "SL.EMP.TOTL.SP.ZS": "Emploi total",
+    "SL.UEM.1524.ZS": "Chômage jeunes",
+    "SL.EMP.TOTL.SP.FE.ZS": "Emploi femmes",
+    "SL.ISV.IFRM.ZS": "Informalité",
+    "SE.PRM.ENRR": "Primaire",
+    "SE.SEC.ENRR": "Secondaire",
+    "SE.TER.ENRR": "Tertiaire",
+    "NV.AGR.TOTL.ZS": "Agriculture PIB",
+    "NV.IND.TOTL.ZS": "Industrie PIB",
+    "NV.SRV.TOTL.ZS": "Services PIB",
+    "SL.AGR.EMPL.ZS": "Agriculture emploi",
+    "SL.IND.EMPL.ZS": "Industrie emploi",
+    "SL.SRV.EMPL.ZS": "Services emploi",
+    "NE.CON.PRVT.ZS": "Conso privée",
+    "NE.CON.GOVT.ZS": "Conso publique",
+    "NE.GDI.FTOT.ZS": "Investissement",
+    "FS.AST.PRVT.GD.ZS": "Crédit privé",
+    "NE.EXP.GNFS.ZS": "Exportations",
+    "NE.IMP.GNFS.ZS": "Importations",
+    "BN.CAB.XOKA.GD.ZS": "Solde courant",
+    "BX.KLT.DINV.WD.GD.ZS": "IDE",
+    "BX.TRF.PWKR.DT.GD.ZS": "Transferts",
+}
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_all_wb(country_code):
-    """Collecte parallèle de tous les indicateurs WB."""
-    all_codes = list(set(WB_CODES_P1 + WB_CODES_P2_LATEST + ["NY.GDP.MKTP.KD.ZG"]))
     results = {}
-
+    
     def fetch_one(code):
         if code == "NY.GDP.MKTP.KD.ZG":
             hist = fetch_wb_history(country_code, code, 25)
@@ -666,378 +678,924 @@ def fetch_all_wb(country_code):
         else:
             v, y = fetch_wb_indicator(country_code, code)
             return code, {"value": v, "year": y}
-
+    
     with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {executor.submit(fetch_one, c): c for c in all_codes}
+        futures = {executor.submit(fetch_one, c): c for c in WB_CODES.keys()}
         for future in as_completed(futures):
             try:
                 code, result = future.result(timeout=30)
                 results[code] = result
-            except Exception:
+            except:
                 results[futures[future]] = {"value": None, "year": None}
-
+    
     return results
 
-def build_pillar1(wb_code, wb_url_base, fh, wb_info, hdi, wb_data):
-    rows = []
-    ic = wb_info.get("income_code", "") if wb_info else ""
-    income = INCOME_LABELS.get(ic, wb_info.get("income_label", "N/D") if wb_info else "N/D")
-    region = wb_info.get("region", "N/D") if wb_info else "N/D"
+# Composants UI
+def render_kpi_card(label, value, unit, signal, year=None, comparison=None, trend=None):
+    year_text = f"<div class='kpi-meta'><span>{year}</span>{f'<span class=\"kpi-trend\">{trend}</span>' if trend else ''}</div>" if year else ""
+    comparison_text = f"<div class='kpi-comparison'>📊 Moyenne régionale: {comparison}</div>" if comparison else ""
+    
+    return f"""
+    <div class="kpi-card {signal}">
+        <div class="kpi-label">{label}</div>
+        <div class="kpi-value {signal}">{value}</div>
+        <div class="kpi-unit">{unit}</div>
+        {year_text}
+        {comparison_text}
+    </div>
+    """
 
-    # Freedom House
-    if fh and not fh.get("error"):
-        if fh.get("score") is not None:
-            rows.append(make_row("Freedom House — Score", f"{fh['score']}/100", None, fh["year"], "Freedom House", fh["url"]))
-        if fh.get("status"):
-            rows.append(make_row("Freedom House — Statut", fh["status"], None, fh["year"], "Freedom House", fh["url"]))
-        if fh.get("pr_score") is not None:
-            rows.append(make_row("Droits politiques", f"{fh['pr_score']}/40", None, fh["year"], "Freedom House", fh["url"]))
-        if fh.get("cl_score") is not None:
-            rows.append(make_row("Libertés civiles", f"{fh['cl_score']}/60", None, fh["year"], "Freedom House", fh["url"]))
+def render_gauge(label, value, min_val, max_val, signal, comparison=None):
+    if value is None:
+        width = 0
+        display_val = "N/D"
     else:
-        rows.append(make_row("Freedom House", "Indisponible", None, None, "Freedom House",
-                             "https://freedomhouse.org", "Erreur scraping"))
+        width = ((value - min_val) / (max_val - min_val)) * 100
+        width = max(0, min(100, width))
+        display_val = f"{value:.2f}"
+    
+    compare_html = ""
+    if comparison is not None:
+        compare_pos = ((comparison - min_val) / (max_val - min_val)) * 100
+        compare_pos = max(0, min(100, compare_pos))
+        compare_html = f'<div class="gauge-compare" style="left:{compare_pos}%;" data-label="Région"></div>'
+    
+    return f"""
+    <div class="gauge-container">
+        <div class="gauge-label">{label}</div>
+        <div class="gauge-bar">
+            <div class="gauge-fill {signal}" style="width:{width}%;">{display_val}</div>
+            {compare_html}
+        </div>
+    </div>
+    """
 
-    rows.append(make_row("EIU — Democracy Index", "Non disponible", None, None,
-                         "EIU", "https://www.eiu.com", "Abonnement requis"))
+def create_pie_chart(values, labels, title):
+    fig = go.Figure(data=[go.Pie(
+        labels=labels,
+        values=values,
+        hole=0.4,
+        marker=dict(colors=['#10b981', '#f59e0b', '#3b82f6']),
+        textinfo='label+percent',
+        textposition='auto'
+    )])
+    fig.update_layout(
+        title=title,
+        showlegend=True,
+        height=350,
+        margin=dict(l=20, r=20, t=40, b=20)
+    )
+    return fig
 
-    # IDH
-    if hdi.get("value") is not None:
-        rows.append(make_row("IDH — Valeur", f"{hdi['value']:.3f}", None, hdi["year"], "PNUD", hdi["url"]))
-        if hdi.get("rank"):
-            rows.append(make_row("IDH — Rang mondial", str(hdi["rank"]), None, hdi["year"], "PNUD", hdi["url"]))
-    else:
-        rows.append(make_row("IDH", "N/D", None, None, "PNUD", hdi.get("url", ""), hdi.get("error", "")))
-
-    rows.append(make_row("Statut de revenu (BM)", income, None, None, "Banque mondiale", wb_url_base))
-    rows.append(make_row("Région BM", region, None, None, "Banque mondiale", wb_url_base))
-
-    # PIB/habitant
-    d = wb_data.get("NY.GDP.PCAP.CD", {})
-    if d.get("value"):
-        rows.append(make_row("PIB / habitant", f"${d['value']:,.0f}", "USD", d.get("year"), "Banque mondiale", wb_url_base))
-
-    # Gini
-    d = wb_data.get("SI.POV.GINI", {})
-    v = d.get("value")
-    rows.append(make_row("Indice de Gini", f"{v:.1f}" if v else "N/D", None, d.get("year"),
-                         "Banque mondiale", wb_url_base, None if v else "Enquêtes intermittentes"))
-
-    # Pauvreté
-    d = wb_data.get("SI.POV.DDAY", {})
-    v = d.get("value")
-    rows.append(make_row("Taux de pauvreté (< 2,15 $/j)", f"{v:.1f}" if v else "N/D", "%", d.get("year"),
-                         "Banque mondiale", wb_url_base, None if v else "Absent pour revenus élevés"))
-
-    # WGI
-    wgi_map = {
-        "VA.EST": "WGI — Expression & responsabilité",
-        "PV.EST": "WGI — Stabilité politique & absence de violence",
-        "GE.EST": "WGI — Efficacité gouvernementale",
-        "RQ.EST": "WGI — Qualité réglementaire",
-        "RL.EST": "WGI — État de droit",
-        "CC.EST": "WGI — Contrôle de la corruption",
-    }
-    wgi_url = "https://info.worldbank.org/governance/wgi/"
-    for code, label in wgi_map.items():
-        d = wb_data.get(code, {})
-        v = d.get("value")
-        rows.append(make_row(label, f"{v:.2f}" if v is not None else "N/D",
-                             "[-2.5;+2.5]", d.get("year"), "Banque mondiale (WGI)", wgi_url))
-
-    # Emploi
-    labour_map = {
-        "SL.EMP.TOTL.SP.ZS":  ("Taux d'emploi total", "%", None),
-        "SL.UEM.1524.ZS":      ("Chômage des jeunes (15-24 ans)", "%", None),
-        "SL.EMP.TOTL.SP.FE.ZS":("Taux d'emploi des femmes", "%", None),
-        "SL.ISV.IFRM.ZS":      ("Taux d'informalité", "%", "Souvent non disponible"),
-    }
-    for code, (label, unit, nt) in labour_map.items():
-        d = wb_data.get(code, {})
-        v = d.get("value")
-        rows.append(make_row(label, f"{v:.1f}" if v is not None else "N/D", unit, d.get("year"),
-                             "Banque mondiale / OIT", wb_url_base, None if v is not None else nt))
-
-    # Éducation
-    edu_map = {
-        "SE.PRM.ENRR": ("Scolarisation primaire (taux brut)", "%"),
-        "SE.SEC.ENRR": ("Scolarisation secondaire (taux brut)", "%"),
-        "SE.TER.ENRR": ("Scolarisation tertiaire (taux brut)", "%"),
-    }
-    for code, (label, unit) in edu_map.items():
-        d = wb_data.get(code, {})
-        v = d.get("value")
-        rows.append(make_row(label, f"{v:.1f}" if v is not None else "N/D", unit, d.get("year"),
-                             "Banque mondiale / UNESCO", wb_url_base))
-
-    return rows
-
-def build_pillar2(wb_code, wb_url_base, wb_data):
-    rows = []
-    wb_url = "https://data.worldbank.org/indicator/"
-
-    p2_labels = {
-        "NY.GDP.MKTP.CD":       ("PIB nominal total",                    "Mds USD"),
-        "NY.GDP.PCAP.CD":       ("PIB par habitant",                     "USD"),
-        "FP.CPI.TOTL.ZG":       ("Inflation annuelle",                   "%"),
-        "NV.AGR.TOTL.ZS":       ("Agriculture — part du PIB",            "% PIB"),
-        "NV.IND.TOTL.ZS":       ("Industrie — part du PIB",              "% PIB"),
-        "NV.IND.MANF.ZS":       ("Manufacturier — part du PIB",          "% PIB"),
-        "NV.SRV.TOTL.ZS":       ("Services — part du PIB",               "% PIB"),
-        "SL.AGR.EMPL.ZS":       ("Emploi agricole",                      "% emploi"),
-        "SL.IND.EMPL.ZS":       ("Emploi industriel",                    "% emploi"),
-        "SL.SRV.EMPL.ZS":       ("Emploi dans les services",             "% emploi"),
-        "NE.CON.PRVT.ZS":       ("Consommation privée",                  "% PIB"),
-        "NE.CON.GOVT.ZS":       ("Consommation publique",                "% PIB"),
-        "NE.GDI.FTOT.ZS":       ("Formation brute de capital fixe",      "% PIB"),
-        "NE.GDI.FPRV.ZS":       ("Investissement privé",                 "% PIB"),
-        "BX.KLT.DINV.WD.GD.ZS":("IDE entrants nets",                    "% PIB"),
-        "BX.TRF.PWKR.DT.GD.ZS":("Transferts de migrants",               "% PIB"),
-        "FS.AST.PRVT.GD.ZS":    ("Crédit domestique secteur privé",      "% PIB"),
-        "NE.EXP.GNFS.ZS":       ("Exportations biens et services",       "% PIB"),
-        "NE.IMP.GNFS.ZS":       ("Importations biens et services",       "% PIB"),
-        "BN.CAB.XOKA.GD.ZS":    ("Solde courant",                        "% PIB"),
-    }
-
-    for code, (label, unit) in p2_labels.items():
-        d = wb_data.get(code, {})
-        v = d.get("value")
-        if code == "NY.GDP.MKTP.CD" and v is not None:
-            disp = f"{v / 1e9:,.1f}"
-        elif v is not None:
-            disp = f"{v:,.1f}"
-        else:
-            disp = "N/D"
-        rows.append(make_row(label, disp, unit, d.get("year"), "Banque mondiale", f"{wb_url}{code}"))
-
-    # Croissance
-    d = wb_data.get("NY.GDP.MKTP.KD.ZG", {})
-    v_last = d.get("value")
-    y_last = d.get("year")
-    hist   = d.get("history", [])
-
-    rows.append(make_row("Croissance du PIB réel — dernière obs.",
-                         f"{v_last:.1f}" if v_last is not None else "N/D",
-                         "%", y_last, "Banque mondiale", f"{wb_url}NY.GDP.MKTP.KD.ZG"))
-
-    a10  = avg_since(hist, 2010)
-    a10y = avg_last(hist, 10)
-    y2010 = [x["year"] for x in hist if x["year"] >= 2010]
-    p2010 = f"{min(y2010)}-{max(y2010)}" if y2010 else None
-    y10y  = [x["year"] for x in hist[-10:]]
-    p10y  = f"{y10y[0]}-{y10y[-1]}" if len(y10y) >= 2 else None
-
-    rows.append(make_row("Croissance moyenne PIB réel depuis 2010",
-                         f"{a10:.1f}" if a10 is not None else "N/D",
-                         "%", p2010, "Banque mondiale (calcul)", f"{wb_url}NY.GDP.MKTP.KD.ZG",
-                         None if a10 is not None else "Série insuffisante"))
-    rows.append(make_row("Croissance moyenne PIB réel — 10 dernières obs.",
-                         f"{a10y:.1f}" if a10y is not None else "N/D",
-                         "%", p10y, "Banque mondiale (calcul)", f"{wb_url}NY.GDP.MKTP.KD.ZG",
-                         None if a10y is not None else "Série insuffisante"))
-
-    # Manuel
-    manual = [
-        ("Part secteur extractif — PIB",          "Comptes nationaux / FMI Art. IV / EITI"),
-        ("Part secteur extractif — exportations",  "UN Comtrade / OEC / FMI Art. IV"),
-        ("Part secteur extractif — recettes pub.", "FMI Art. IV / DSA FMI"),
-        ("Part du tourisme dans le PIB",           "WTTC / UN Tourism / FMI Art. IV"),
-        ("Croissance potentielle FMI",             "FMI Art. IV"),
-        ("Prévisions FMI (année en cours / N+1)",  "FMI Art. IV / WEO"),
-        ("Réformes et chocs récents",              "FMI Art. IV / Banque mondiale MPO"),
-    ]
-    for label, note in manual:
-        rows.append(make_row(label, "À compléter", None, None, "Source sectorielle", "", note))
-
-    return rows
-
-# Rendu HTML
-def render_group(group_name, rows, color):
-    lines = [f"""
-<div class="theme-wrap" style="border-left-color:{color};">
-<div class="theme-title" style="color:{color};">{group_name}</div>
-"""]
-    for r in rows:
-        bc   = badge_class(r["label"], r["value"])
-        icon = trend_icon(r["label"], r["value"])
-        disp = f"{icon} {r['value']}" if icon else r["value"]
-        unit = f'<span class="ind-unit">{r["unit"]}</span>' if r["unit"] else ""
-        yr   = f'<span class="ind-year">{r["year"]}</span>' if r["year"] not in ("", "—") else ""
-        src  = (f'<span class="ind-src"><a href="{r["url"]}" target="_blank">↗ {r["source"]}</a></span>'
-                if r["url"] else f'<span class="ind-src">{r["source"]}</span>')
-        note = f'<span class="ind-note">⚠ {r["note"]}</span>' if r["note"] else ""
-        lines.append(f"""
-<div class="ind-row">
-  <span class="ind-lbl">{r["label"]}</span>
-  <span class="ind-badge {bc}">{disp}</span>
-  {unit}{yr}{src}{note}
-</div>""")
-    lines.append("</div>")
-    return "".join(lines)
-
-def show_summary(rows):
-    total     = len(rows)
-    available = sum(1 for r in rows if r["value"] not in ["N/D", "—", "À compléter", "Non disponible", "Indisponible"])
-    green     = sum(1 for r in rows if badge_class(r["label"], r["value"]) in ("bg-green", "bg-lgreen"))
-    red       = sum(1 for r in rows if badge_class(r["label"], r["value"]) == "bg-red")
-    pct       = int(100 * available / total) if total else 0
-
-    st.markdown(f"""
-<div class="summary-row">
-  <div class="s-card">
-    <div class="s-val">{total}</div>
-    <div class="s-lbl">Indicateurs</div>
-  </div>
-  <div class="s-card" style="border-top-color:#0891b2;">
-    <div class="s-val" style="color:#0891b2;">{pct}%</div>
-    <div class="s-lbl">Couverture</div>
-  </div>
-  <div class="s-card" style="border-top-color:#059669;">
-    <div class="s-val" style="color:#059669;">{green}</div>
-    <div class="s-lbl">Signaux positifs</div>
-  </div>
-  <div class="s-card" style="border-top-color:#dc2626;">
-    <div class="s-val" style="color:#dc2626;">{red}</div>
-    <div class="s-lbl">Signaux d'alerte</div>
-  </div>
-</div>
-<div class="legend">
-  <div class="legend-item"><div class="ldot" style="background:#15803d;"></div>Favorable</div>
-  <div class="legend-item"><div class="ldot" style="background:#16a34a;"></div>Plutôt favorable</div>
-  <div class="legend-item"><div class="ldot" style="background:#c2410c;"></div>Intermédiaire</div>
-  <div class="legend-item"><div class="ldot" style="background:#b91c1c;"></div>Défavorable</div>
-  <div class="legend-item"><div class="ldot" style="background:#1d4ed8;"></div>Informatif</div>
-  <div class="legend-item"><div class="ldot" style="background:#7c3aed;"></div>Qualitatif</div>
-  <div class="legend-item"><div class="ldot" style="background:#94a3b8;"></div>Non disponible</div>
-  <span style="margin-left:auto;font-size:11px;color:#f59e0b;">⚠ = donnée ancienne ou manquante</span>
-</div>
-""", unsafe_allow_html=True)
-
-def show_pillar(title, subtitle, rows, groups):
-    st.markdown(f'<div class="pillar-header">{title}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="pillar-sub">{subtitle}</div>', unsafe_allow_html=True)
-
-    show_summary(rows)
-
-    grouped = group_rows(rows, groups)
-    tab_names = [g[0] for g in grouped]
-
-    if not tab_names:
-        st.info("Aucune donnée disponible.")
-        return
-
-    tabs = st.tabs(tab_names)
-    for tab, (gname, grows) in zip(tabs, grouped):
-        with tab:
-            color = THEME_COLORS.get(gname, "#003189")
-            st.markdown(render_group(gname, grows, color), unsafe_allow_html=True)
-
-    with st.expander("📋 Tableau complet", expanded=False):
-        df = pd.DataFrame([{
-            "Indicateur": r["label"],
-            "Valeur":     r["value"],
-            "Unité":      r["unit"],
-            "Année":      r["year"],
-            "Source":     r["source"],
-            "Lien":       r["url"],
-            "Note":       r["note"],
-        } for r in rows])
-        st.dataframe(
-            df,
-            use_container_width=True,
-            hide_index=True,
-            column_config={"Lien": st.column_config.LinkColumn("Lien", display_text="↗")}
+def create_line_chart(data, title, y_label, show_regional=False, regional_avg=None):
+    fig = go.Figure()
+    
+    # Ligne principale
+    fig.add_trace(go.Scatter(
+        x=[d["year"] for d in data],
+        y=[d["value"] for d in data],
+        mode='lines+markers',
+        name='Pays',
+        line=dict(color='#003189', width=3),
+        marker=dict(size=6)
+    ))
+    
+    # Moyenne depuis 2010
+    data_2010 = [d for d in data if d["year"] >= 2010]
+    if data_2010:
+        avg = sum(d["value"] for d in data_2010) / len(data_2010)
+        fig.add_hline(
+            y=avg,
+            line_dash="dash",
+            line_color="#64748b",
+            annotation_text=f"Moyenne 2010-présent: {avg:.1f}%",
+            annotation_position="right"
         )
+    
+    # Moyenne régionale
+    if show_regional and regional_avg is not None:
+        fig.add_hline(
+            y=regional_avg,
+            line_dash="dot",
+            line_color="#f59e0b",
+            annotation_text=f"Moyenne régionale: {regional_avg:.1f}%",
+            annotation_position="left"
+        )
+    
+    # Zone de récession
+    for d in data:
+        if d["value"] < 0:
+            fig.add_vrect(
+                x0=d["year"]-0.5,
+                x1=d["year"]+0.5,
+                fillcolor="red",
+                opacity=0.1,
+                line_width=0
+            )
+    
+    fig.update_layout(
+        title=title,
+        xaxis_title="Année",
+        yaxis_title=y_label,
+        hovermode='x unified',
+        height=400,
+        margin=dict(l=40, r=40, t=60, b=40)
+    )
+    
+    return fig
 
-def show_prompt(title, text):
-    st.markdown(f'<div class="prompt-title">🤖 {title}</div>', unsafe_allow_html=True)
-    st.text_area("", value=text, height=320, help="Ctrl+A puis Ctrl+C pour copier.")
+def create_bar_chart(categories, values, comparison_values, title, y_label):
+    fig = go.Figure()
+    
+    fig.add_trace(go.Bar(
+        x=categories,
+        y=values,
+        name='Pays',
+        marker_color='#003189'
+    ))
+    
+    if comparison_values:
+        fig.add_trace(go.Bar(
+            x=categories,
+            y=comparison_values,
+            name='Moyenne régionale',
+            marker_color='#94a3b8',
+            opacity=0.6
+        ))
+    
+    fig.update_layout(
+        title=title,
+        yaxis_title=y_label,
+        barmode='group',
+        height=350,
+        margin=dict(l=40, r=40, t=60, b=40)
+    )
+    
+    return fig
 
-# Prompts
-def make_prompt(country, rows, pillar_title, instructions):
-    lines = [f"FICHE PAYS — {country.upper()}", pillar_title, "=" * 70, "", "DONNÉES COLLECTÉES", "-" * 40]
-    for r in rows:
-        u = f" {r['unit']}" if r["unit"] else ""
-        y = f" ({r['year']})" if r["year"] not in ("", "—") else ""
-        n = f" — ⚠ {r['note']}" if r["note"] else ""
-        lines.append(f"• {r['label']} : {r['value']}{u}{y} — {r['source']}{n}")
-    lines += ["", "=" * 70, "CONSIGNE", "-" * 40, ""] + instructions
-    return "\n".join(lines)
+def create_stacked_bar(categories, values_country, values_region, title):
+    fig = go.Figure()
+    
+    colors = ['#10b981', '#f59e0b', '#3b82f6']
+    
+    for i, cat in enumerate(categories):
+        fig.add_trace(go.Bar(
+            y=['Pays'],
+            x=[values_country[i]],
+            name=cat,
+            orientation='h',
+            marker_color=colors[i % len(colors)]
+        ))
+    
+    if values_region:
+        for i, cat in enumerate(categories):
+            fig.add_trace(go.Bar(
+                y=['Région'],
+                x=[values_region[i]],
+                name=cat,
+                orientation='h',
+                marker_color=colors[i % len(colors)],
+                opacity=0.6,
+                showlegend=False
+            ))
+    
+    fig.update_layout(
+        title=title,
+        barmode='stack',
+        height=200,
+        margin=dict(l=100, r=40, t=60, b=40),
+        xaxis_title="% du total"
+    )
+    
+    return fig
 
-def prompt_p1(country, rows):
-    return make_prompt(country, rows, "PILIER 1 : ENVIRONNEMENT POLITIQUE ET SOCIOÉCONOMIQUE", [
-        "Rédige une analyse en 5 parties :",
-        "1. Régime politique & libertés",
-        "2. Gouvernance institutionnelle (WGI)",
-        "3. Développement humain & inégalités",
-        "4. Marché du travail",
-        "5. Capital humain & éducation",
-        "",
-        "Règles : pas de chiffres inventés · signaler les lacunes · style institutionnel · ~450 mots.",
-    ])
-
-def prompt_p2(country, rows):
-    return make_prompt(country, rows, "PILIER 2 : MODÈLE ÉCONOMIQUE ET RÉGIME DE CROISSANCE", [
-        "Rédige une analyse en 2 parties :",
-        "Partie 1 — Modèle économique : structure, secteurs, forces/fragilités",
-        "Partie 2 — Régime de croissance : rythme, moteurs, soutenabilité",
-        "",
-        "Règles : pas de chiffres inventés · style institutionnel dense · ~550 mots.",
-    ])
-
-# Interface
+# Interface principale
 st.markdown("""
-<div class="afd-header">
-  <h1>🌍 Outil de collecte de données — DER</h1>
-  <p>Collecte automatique · Sources officielles · Classification thématique · Codes couleur · Prompt IA</p>
+<div class="main-header">
+    <h1>🌍 Dashboard Pays — Direction des Études et Recherches</h1>
+    <p>Collecte automatisée · Visualisations · Comparaisons régionales · Export PDF/Excel</p>
 </div>
 """, unsafe_allow_html=True)
 
-col1, col2 = st.columns([4, 1])
+col1, col2 = st.columns([3, 1])
 with col1:
     opts = dict(sorted({v["name"]: k for k, v in COUNTRY_MAPPING.items()}.items()))
-    selected = st.selectbox("🌐 Pays", options=list(opts.keys()), label_visibility="visible")
+    selected = st.selectbox("🌐 Sélectionner un pays", options=list(opts.keys()))
+
 with col2:
-    st.write(""); st.write("")
-    run = st.button("Collecter →")
+    st.write("")
+    st.write("")
+    run = st.button("🚀 Collecter les données", use_container_width=True)
 
 if run:
-    ci      = COUNTRY_MAPPING[opts[selected]]
+    ci = COUNTRY_MAPPING[opts[selected]]
     wb_code = ci["world_bank_code"]
-    wb_url  = f"https://data.worldbank.org/country/{ci['wb_url_code']}"
-
-    prog = st.progress(0, text="Initialisation…")
-
-    prog.progress(10, text="Freedom House…")
+    
+    # Progress
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    status_text.text("🔍 Collecte Freedom House...")
+    progress_bar.progress(10)
     fh = fetch_freedom_house(ci["freedom_house_slug"])
-
-    prog.progress(25, text="Informations pays (Banque mondiale)…")
+    
+    status_text.text("🏦 Collecte Banque mondiale...")
+    progress_bar.progress(30)
     wb_info = fetch_wb_country_info(wb_code)
-
-    prog.progress(35, text="IDH — PNUD…")
+    
+    status_text.text("📊 Collecte IDH...")
+    progress_bar.progress(50)
     hdi = fetch_hdi(ci["name"])
-
-    prog.progress(45, text="Indicateurs Banque mondiale (parallèle)…")
+    
+    status_text.text("📈 Collecte indicateurs économiques...")
+    progress_bar.progress(70)
     wb_data = fetch_all_wb(wb_code)
+    
+    status_text.text("✅ Traitement des données...")
+    progress_bar.progress(90)
+    
+    # Déterminer la région pour comparaisons
+    region_name = wb_info.get("region", "") if wb_info else ""
+    regional_data = None
+    for key in REGIONAL_AVERAGES:
+        if key in region_name:
+            regional_data = REGIONAL_AVERAGES[key]
+            break
+    
+    progress_bar.progress(100)
+    status_text.text("✅ Collecte terminée!")
+    
+    # Toggle comparaisons
+    show_comparisons = st.checkbox("📊 Afficher les comparaisons régionales", value=False)
+    
+    # Carte pays
+    flag = ci.get("flag", "")
+    income_label = INCOME_LABELS.get(wb_info.get("income_code", "") if wb_info else "", "Non disponible")
+    
+    st.markdown(f"""
+    <div class="country-card">
+        <div class="country-name">{flag} {ci['name']}</div>
+        <div class="country-meta">
+            <div class="country-meta-item">
+                <span class="country-meta-label">Région:</span>
+                <span>{region_name}</span>
+            </div>
+            <div class="country-meta-item">
+                <span class="country-meta-label">Revenu:</span>
+                <span>{income_label}</span>
+            </div>
+            <div class="country-meta-item">
+                <span class="country-meta-label">Collecte:</span>
+                <span>{datetime.now().strftime("%d/%m/%Y %H:%M")}</span>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # ============================================
+    # PILIER 1 : ENVIRONNEMENT POLITIQUE & SOCIO
+    # ============================================
+    
+    total_p1 = 20
+    available_p1 = 0
+    
+    st.markdown("""
+    <div class="pillar-divider">
+        <div class="pillar-title">🏛️ PILIER 1 : Environnement politique et socioéconomique</div>
+        <div class="pillar-subtitle">Régime politique · Gouvernance · Développement humain · Emploi · Éducation</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 1.1 Vue d'ensemble P1
+    st.markdown('<div class="section-header">📌 Vue d\'ensemble</div>', unsafe_allow_html=True)
+    
+    kpi_html = '<div class="kpi-grid">'
+    
+    # Freedom House
+    fh_score = fh.get("score") if fh and not fh.get("error") else None
+    fh_status = fh.get("status") if fh and not fh.get("error") else "N/D"
+    fh_signal = get_signal(fh_score, {"high": 70, "low": 40, "reverse": False})
+    if fh_score:
+        available_p1 += 1
+    kpi_html += render_kpi_card(
+        "Freedom House",
+        f"{fh_score}/100" if fh_score else "N/D",
+        fh_status,
+        fh_signal,
+        fh.get("year") if fh and not fh.get("error") else None
+    )
+    
+    # IDH
+    hdi_val = hdi.get("value")
+    hdi_rank = hdi.get("rank")
+    hdi_signal = get_signal(hdi_val, {"high": 0.800, "low": 0.550, "reverse": False})
+    hdi_comparison = f"{regional_data['hdi']:.3f}" if show_comparisons and regional_data else None
+    if hdi_val:
+        available_p1 += 1
+    kpi_html += render_kpi_card(
+        "Indice de Développement Humain",
+        f"{hdi_val:.3f}" if hdi_val else "N/D",
+        f"Rang mondial: {hdi_rank}" if hdi_rank else "",
+        hdi_signal,
+        hdi.get("year"),
+        hdi_comparison
+    )
+    
+    # Pauvreté
+    poverty_val = wb_data.get("SI.POV.DDAY", {}).get("value")
+    poverty_year = wb_data.get("SI.POV.DDAY", {}).get("year")
+    poverty_signal = get_signal(poverty_val, {"high": 20, "low": 5, "reverse": True})
+    poverty_comparison = f"{regional_data['poverty']:.1f}%" if show_comparisons and regional_data else None
+    if poverty_val:
+        available_p1 += 1
+    kpi_html += render_kpi_card(
+        "Taux de pauvreté",
+        f"{poverty_val:.1f}" if poverty_val else "N/D",
+        "% pop. < 2,15$/jour",
+        poverty_signal,
+        poverty_year,
+        poverty_comparison
+    )
+    
+    # Gini
+    gini_val = wb_data.get("SI.POV.GINI", {}).get("value")
+    gini_year = wb_data.get("SI.POV.GINI", {}).get("year")
+    gini_signal = get_signal(gini_val, {"high": 45, "low": 32, "reverse": True})
+    gini_comparison = f"{regional_data['gini']:.1f}" if show_comparisons and regional_data else None
+    if gini_val:
+        available_p1 += 1
+    kpi_html += render_kpi_card(
+        "Indice de Gini",
+        f"{gini_val:.1f}" if gini_val else "N/D",
+        "Inégalités",
+        gini_signal,
+        gini_year,
+        gini_comparison
+    )
+    
+    kpi_html += '</div>'
+    st.markdown(kpi_html, unsafe_allow_html=True)
+    
+    # 1.2 Gouvernance WGI
+    st.markdown('<div class="section-header">⚖️ Gouvernance institutionnelle (WGI)</div>', unsafe_allow_html=True)
+    
+    wgi_codes = {
+        "VA.EST": "Expression & responsabilité",
+        "PV.EST": "Stabilité politique",
+        "GE.EST": "Efficacité gouvernementale",
+        "RQ.EST": "Qualité réglementaire",
+        "RL.EST": "État de droit",
+        "CC.EST": "Contrôle de la corruption",
+    }
+    
+    wgi_html = ""
+    for code, label in wgi_codes.items():
+        val = wb_data.get(code, {}).get("value")
+        if val:
+            available_p1 += 1
+        signal = get_signal(val, {"high": 0.5, "low": -0.3, "reverse": False})
+        wgi_html += render_gauge(label, val, -2.5, 2.5, signal, 0 if show_comparisons else None)
+    
+    st.markdown(wgi_html, unsafe_allow_html=True)
+    
+    # 1.3 Marché du travail
+    st.markdown('<div class="section-header">👷 Marché du travail</div>', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        emp_total = wb_data.get("SL.EMP.TOTL.SP.ZS", {}).get("value")
+        if emp_total:
+            available_p1 += 1
+        emp_signal = get_signal(emp_total, {"high": 75, "low": 50, "reverse": False})
+        st.markdown(render_gauge(
+            "Taux d'emploi total",
+            emp_total,
+            0, 100,
+            emp_signal
+        ), unsafe_allow_html=True)
+        
+        unemp_youth = wb_data.get("SL.UEM.1524.ZS", {}).get("value")
+        if unemp_youth:
+            available_p1 += 1
+        unemp_signal = get_signal(unemp_youth, {"high": 25, "low": 10, "reverse": True})
+        st.markdown(render_gauge(
+            "Chômage des jeunes (15-24 ans)",
+            unemp_youth,
+            0, 100,
+            unemp_signal
+        ), unsafe_allow_html=True)
+    
+    with col2:
+        emp_female = wb_data.get("SL.EMP.TOTL.SP.FE.ZS", {}).get("value")
+        if emp_female:
+            available_p1 += 1
+        emp_f_signal = get_signal(emp_female, {"high": 75, "low": 50, "reverse": False})
+        st.markdown(render_gauge(
+            "Taux d'emploi des femmes",
+            emp_female,
+            0, 100,
+            emp_f_signal
+        ), unsafe_allow_html=True)
+        
+        informal = wb_data.get("SL.ISV.IFRM.ZS", {}).get("value")
+        if informal:
+            available_p1 += 1
+        informal_signal = get_signal(informal, {"high": 50, "low": 25, "reverse": True})
+        st.markdown(render_gauge(
+            "Taux d'informalité",
+            informal,
+            0, 100,
+            informal_signal
+        ), unsafe_allow_html=True)
+    
+    # 1.4 Éducation
+    st.markdown('<div class="section-header">📚 Capital humain & éducation</div>', unsafe_allow_html=True)
+    
+    primary = wb_data.get("SE.PRM.ENRR", {}).get("value")
+    secondary = wb_data.get("SE.SEC.ENRR", {}).get("value")
+    tertiary = wb_data.get("SE.TER.ENRR", {}).get("value")
+    
+    if primary:
+        available_p1 += 1
+    if secondary:
+        available_p1 += 1
+    if tertiary:
+        available_p1 += 1
+    
+    edu_comparison = None
+    if show_comparisons and regional_data:
+        edu_comparison = [
+            regional_data.get("primary_school"),
+            regional_data.get("secondary_school"),
+            regional_data.get("tertiary_school")
+        ]
+    
+    if primary or secondary or tertiary:
+        fig = create_bar_chart(
+            ["Primaire", "Secondaire", "Tertiaire"],
+            [primary or 0, secondary or 0, tertiary or 0],
+            edu_comparison,
+            "Taux de scolarisation (taux brut)",
+            "% de la population"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Prompt P1
+    st.markdown("""
+    <div class="prompt-box">
+        <div class="prompt-title">🤖 Prompt IA — Pilier 1</div>
+    """, unsafe_allow_html=True)
+    
+    prompt_p1 = f"""FICHE PAYS — {ci['name'].upper()}
+PILIER 1 : ENVIRONNEMENT POLITIQUE ET SOCIOÉCONOMIQUE
+{'='*70}
 
-    prog.progress(85, text="Construction des piliers…")
-    p1 = build_pillar1(wb_code, wb_url, fh, wb_info, hdi, wb_data)
-    p2 = build_pillar2(wb_code, wb_url, wb_data)
+DONNÉES COLLECTÉES
+{'-'*40}
+• Freedom House Score: {fh_score}/100 ({fh_status}) — {fh.get('year') if fh and not fh.get('error') else 'N/D'}
+• IDH: {hdi_val:.3f if hdi_val else 'N/D'} (Rang: {hdi_rank if hdi_rank else 'N/D'}) — 2023
+• Pauvreté: {poverty_val:.1f if poverty_val else 'N/D'}% — {poverty_year or 'N/D'}
+• Gini: {gini_val:.1f if gini_val else 'N/D'} — {gini_year or 'N/D'}
 
-    prog.progress(100, text="Terminé ✓")
-    prog.empty()
+WGI Gouvernance:
+{chr(10).join(f'• {label}: {wb_data.get(code, {}).get("value"):.2f if wb_data.get(code, {}).get("value") else "N/D"}' for code, label in wgi_codes.items())}
 
-    show_pillar("📌 Pilier 1 — Environnement politique et socioéconomique",
-                "Freedom House · IDH · Gouvernance WGI · Emploi · Pauvreté · Éducation",
-                p1, GROUPS_P1)
-    show_prompt("Prompt IA — Pilier 1", prompt_p1(selected, p1))
+Marché du travail:
+• Emploi total: {emp_total:.1f if emp_total else 'N/D'}%
+• Chômage jeunes: {unemp_youth:.1f if unemp_youth else 'N/D'}%
+• Emploi femmes: {emp_female:.1f if emp_female else 'N/D'}%
+• Informalité: {informal:.1f if informal else 'N/D'}%
 
-    st.markdown("---")
+Éducation:
+• Primaire: {primary:.1f if primary else 'N/D'}%
+• Secondaire: {secondary:.1f if secondary else 'N/D'}%
+• Tertiaire: {tertiary:.1f if tertiary else 'N/D'}%
 
-    show_pillar("📈 Pilier 2 — Modèle économique et régime de croissance",
-                "Structure productive · Emploi sectoriel · Demande · Financement · Ouverture · Croissance",
-                p2, GROUPS_P2)
-    show_prompt("Prompt IA — Pilier 2", prompt_p2(selected, p2))
+{'='*70}
+CONSIGNE
+{'-'*40}
+Rédige une analyse structurée en 5 parties:
 
-    st.markdown(f'<p class="footer-note">Collecte du {datetime.now().strftime("%d/%m/%Y à %H:%M")} '
-                f'· AFD — Direction des Études et Recherches</p>', unsafe_allow_html=True)
+1. Régime politique & libertés (Freedom House, tendances)
+2. Gouvernance institutionnelle (analyse WGI)
+3. Développement humain & inégalités (IDH, pauvreté, Gini)
+4. Marché du travail (emploi, chômage, informalité)
+5. Capital humain (scolarisation, perspectives)
+
+Règles:
+- Pas de chiffres inventés
+- Signaler les lacunes de données
+- Style institutionnel, analytique
+- ~450 mots
+"""
+    
+    st.text_area("", value=prompt_p1, height=400, key="prompt_p1")
+    if st.button("📋 Copier le prompt", key="copy_p1"):
+        st.success("✅ Copié! (Ctrl+A puis Ctrl+C)")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    # ============================================
+    # PILIER 2 : MODÈLE ÉCO & RÉGIME DE CROISSANCE
+    # ============================================
+    
+    total_p2 = 25
+    available_p2 = 0
+    
+    st.markdown("""
+    <div class="pillar-divider">
+        <div class="pillar-title">📈 PILIER 2 : Modèle économique et régime de croissance</div>
+        <div class="pillar-subtitle">Structure productive · Dynamique de croissance · Demande · Ouverture externe</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 2.1 Vue d'ensemble P2
+    st.markdown('<div class="section-header">📌 Vue d\'ensemble</div>', unsafe_allow_html=True)
+    
+    kpi_html = '<div class="kpi-grid">'
+    
+    # PIB/hab
+    gdp_pc = wb_data.get("NY.GDP.PCAP.CD", {}).get("value")
+    gdp_pc_year = wb_data.get("NY.GDP.PCAP.CD", {}).get("year")
+    gdp_signal = get_signal(gdp_pc, {"high": 10000, "low": 3000, "reverse": False})
+    if gdp_pc:
+        available_p2 += 1
+    kpi_html += render_kpi_card(
+        "PIB par habitant",
+        f"${gdp_pc:,.0f}" if gdp_pc else "N/D",
+        "USD",
+        gdp_signal,
+        gdp_pc_year
+    )
+    
+    # Croissance
+    growth = wb_data.get("NY.GDP.MKTP.KD.ZG", {}).get("value")
+    growth_year = wb_data.get("NY.GDP.MKTP.KD.ZG", {}).get("year")
+    growth_signal = get_signal(growth, {"high": 5, "low": 2, "reverse": False})
+    growth_comparison = f"{regional_data['gdp_growth']:.1f}%" if show_comparisons and regional_data else None
+    if growth:
+        available_p2 += 1
+    kpi_html += render_kpi_card(
+        "Croissance du PIB",
+        f"{growth:.1f}" if growth else "N/D",
+        "% annuel",
+        growth_signal,
+        growth_year,
+        growth_comparison
+    )
+    
+    # Inflation
+    inflation = wb_data.get("FP.CPI.TOTL.ZG", {}).get("value")
+    inflation_year = wb_data.get("FP.CPI.TOTL.ZG", {}).get("year")
+    inflation_signal = get_signal(inflation, {"high": 10, "low": 4, "reverse": True})
+    inflation_comparison = f"{regional_data['inflation']:.1f}%" if show_comparisons and regional_data else None
+    if inflation:
+        available_p2 += 1
+    kpi_html += render_kpi_card(
+        "Inflation",
+        f"{inflation:.1f}" if inflation else "N/D",
+        "% annuel",
+        inflation_signal,
+        inflation_year,
+        inflation_comparison
+    )
+    
+    # Solde courant
+    current_acc = wb_data.get("BN.CAB.XOKA.GD.ZS", {}).get("value")
+    current_acc_year = wb_data.get("BN.CAB.XOKA.GD.ZS", {}).get("year")
+    current_signal = "green" if current_acc and current_acc > 0 else ("orange" if current_acc and current_acc > -5 else "red")
+    if current_acc:
+        available_p2 += 1
+    kpi_html += render_kpi_card(
+        "Solde courant",
+        f"{current_acc:.1f}" if current_acc else "N/D",
+        "% du PIB",
+        current_signal,
+        current_acc_year
+    )
+    
+    kpi_html += '</div>'
+    st.markdown(kpi_html, unsafe_allow_html=True)
+    
+    # 2.2 Structure productive
+    st.markdown('<div class="section-header">🏗️ Structure productive</div>', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown('<div class="chart-title">Composition du PIB</div>', unsafe_allow_html=True)
+        agri_gdp = wb_data.get("NV.AGR.TOTL.ZS", {}).get("value")
+        ind_gdp = wb_data.get("NV.IND.TOTL.ZS", {}).get("value")
+        serv_gdp = wb_data.get("NV.SRV.TOTL.ZS", {}).get("value")
+        
+        if agri_gdp:
+            available_p2 += 1
+        if ind_gdp:
+            available_p2 += 1
+        if serv_gdp:
+            available_p2 += 1
+        
+        if agri_gdp and ind_gdp and serv_gdp:
+            fig = create_pie_chart(
+                [agri_gdp, ind_gdp, serv_gdp],
+                ["Agriculture", "Industrie", "Services"],
+                ""
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        st.markdown('<div class="chart-title">Composition de l\'emploi</div>', unsafe_allow_html=True)
+        agri_emp = wb_data.get("SL.AGR.EMPL.ZS", {}).get("value")
+        ind_emp = wb_data.get("SL.IND.EMPL.ZS", {}).get("value")
+        serv_emp = wb_data.get("SL.SRV.EMPL.ZS", {}).get("value")
+        
+        if agri_emp:
+            available_p2 += 1
+        if ind_emp:
+            available_p2 += 1
+        if serv_emp:
+            available_p2 += 1
+        
+        emp_country = [agri_emp or 0, ind_emp or 0, serv_emp or 0]
+        emp_region = None
+        if show_comparisons and regional_data:
+            emp_region = [
+                regional_data.get("agriculture_emp"),
+                regional_data.get("industry_emp"),
+                regional_data.get("services_emp")
+            ]
+        
+        if any(emp_country):
+            fig = create_stacked_bar(
+                ["Agriculture", "Industrie", "Services"],
+                emp_country,
+                emp_region,
+                ""
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    
+    # 2.3 Dynamique de croissance
+    st.markdown('<div class="section-header">📊 Dynamique de croissance</div>', unsafe_allow_html=True)
+    
+    growth_hist = wb_data.get("NY.GDP.MKTP.KD.ZG", {}).get("history", [])
+    if growth_hist:
+        regional_avg = regional_data.get("gdp_growth") if show_comparisons and regional_data else None
+        fig = create_line_chart(
+            growth_hist,
+            "Croissance du PIB réel (15 dernières années)",
+            "% annuel",
+            show_comparisons,
+            regional_avg
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Tableau récapitulatif
+        avg_2010 = avg_since(growth_hist, 2010)
+        avg_10 = avg_last(growth_hist, 10)
+        
+        recap_df = pd.DataFrame({
+            "Période": ["Depuis 2010", "10 dernières observations"],
+            "Croissance moyenne pays": [
+                f"{avg_2010:.1f}%" if avg_2010 else "N/D",
+                f"{avg_10:.1f}%" if avg_10 else "N/D"
+            ],
+            "Croissance moyenne région": [
+                f"{regional_avg:.1f}%" if show_comparisons and regional_avg else "—",
+                f"{regional_avg:.1f}%" if show_comparisons and regional_avg else "—"
+            ]
+        })
+        st.dataframe(recap_df, use_container_width=True, hide_index=True)
+    
+    # 2.4 Demande & financement
+    st.markdown('<div class="section-header">💹 Demande & investissement</div>', unsafe_allow_html=True)
+    
+    demand_items = {
+        "NE.CON.PRVT.ZS": ("Consommation privée", "consumption_private"),
+        "NE.CON.GOVT.ZS": ("Consommation publique", "consumption_public"),
+        "NE.GDI.FTOT.ZS": ("Investissement (FBCF)", "investment"),
+        "FS.AST.PRVT.GD.ZS": ("Crédit au secteur privé", "credit_private"),
+    }
+    
+    demand_html = ""
+    for code, (label, regional_key) in demand_items.items():
+        val = wb_data.get(code, {}).get("value")
+        if val:
+            available_p2 += 1
+        signal = get_signal(val, {"high": 75, "low": 40, "reverse": False})
+        comparison = regional_data.get(regional_key) if show_comparisons and regional_data else None
+        demand_html += render_gauge(label, val, 0, 100, signal, comparison)
+    
+    st.markdown(demand_html, unsafe_allow_html=True)
+    
+    # 2.5 Ouverture externe
+    st.markdown('<div class="section-header">🌍 Ouverture externe</div>', unsafe_allow_html=True)
+    
+    exports = wb_data.get("NE.EXP.GNFS.ZS", {}).get("value")
+    imports = wb_data.get("NE.IMP.GNFS.ZS", {}).get("value")
+    fdi = wb_data.get("BX.KLT.DINV.WD.GD.ZS", {}).get("value")
+    remittances = wb_data.get("BX.TRF.PWKR.DT.GD.ZS", {}).get("value")
+    
+    if exports:
+        available_p2 += 1
+    if imports:
+        available_p2 += 1
+    if fdi:
+        available_p2 += 1
+    if remittances:
+        available_p2 += 1
+    
+    external_comparison = None
+    if show_comparisons and regional_data:
+        external_comparison = [
+            regional_data.get("exports"),
+            regional_data.get("imports"),
+            regional_data.get("fdi"),
+            regional_data.get("remittances")
+        ]
+    
+    if any([exports, imports, fdi, remittances]):
+        fig = create_bar_chart(
+            ["Exportations", "Importations", "IDE", "Transferts migrants"],
+            [exports or 0, imports or 0, fdi or 0, remittances or 0],
+            external_comparison,
+            "Ouverture externe (% du PIB)",
+            "% du PIB"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # 2.6 Indicateurs à compléter
+    st.markdown('<div class="section-header">⚠️ Indicateurs à compléter manuellement</div>', unsafe_allow_html=True)
+    
+    manual_indicators = [
+        "Part du secteur extractif dans le PIB",
+        "Part du secteur extractif dans les exportations",
+        "Part du secteur extractif dans les recettes publiques",
+        "Part du tourisme dans le PIB",
+        "Croissance potentielle (FMI)",
+        "Prévisions FMI (année en cours / N+1)",
+        "Réformes et chocs récents"
+    ]
+    
+    st.info("📝 " + " · ".join(manual_indicators))
+    
+    # Prompt P2
+    st.markdown("""
+    <div class="prompt-box">
+        <div class="prompt-title">🤖 Prompt IA — Pilier 2</div>
+    """, unsafe_allow_html=True)
+    
+    prompt_p2 = f"""FICHE PAYS — {ci['name'].upper()}
+PILIER 2 : MODÈLE ÉCONOMIQUE ET RÉGIME DE CROISSANCE
+{'='*70}
+
+DONNÉES COLLECTÉES
+{'-'*40}
+Vue d'ensemble:
+• PIB/habitant: ${gdp_pc:,.0f if gdp_pc else 'N/D'} — {gdp_pc_year or 'N/D'}
+• Croissance: {growth:.1f if growth else 'N/D'}% — {growth_year or 'N/D'}
+• Inflation: {inflation:.1f if inflation else 'N/D'}% — {inflation_year or 'N/D'}
+• Solde courant: {current_acc:.1f if current_acc else 'N/D'}% PIB — {current_acc_year or 'N/D'}
+
+Structure du PIB:
+• Agriculture: {agri_gdp:.1f if agri_gdp else 'N/D'}%
+• Industrie: {ind_gdp:.1f if ind_gdp else 'N/D'}%
+• Services: {serv_gdp:.1f if serv_gdp else 'N/D'}%
+
+Structure de l'emploi:
+• Agriculture: {agri_emp:.1f if agri_emp else 'N/D'}%
+• Industrie: {ind_emp:.1f if ind_emp else 'N/D'}%
+• Services: {serv_emp:.1f if serv_emp else 'N/D'}%
+
+Croissance:
+• Moyenne depuis 2010: {avg_2010:.1f if avg_2010 else 'N/D'}%
+• Moyenne 10 dernières obs.: {avg_10:.1f if avg_10 else 'N/D'}%
+
+Demande:
+• Consommation privée: {wb_data.get('NE.CON.PRVT.ZS', {}).get('value'):.1f if wb_data.get('NE.CON.PRVT.ZS', {}).get('value') else 'N/D'}% PIB
+• Consommation publique: {wb_data.get('NE.CON.GOVT.ZS', {}).get('value'):.1f if wb_data.get('NE.CON.GOVT.ZS', {}).get('value') else 'N/D'}% PIB
+• Investissement: {wb_data.get('NE.GDI.FTOT.ZS', {}).get('value'):.1f if wb_data.get('NE.GDI.FTOT.ZS', {}).get('value') else 'N/D'}% PIB
+• Crédit privé: {wb_data.get('FS.AST.PRVT.GD.ZS', {}).get('value'):.1f if wb_data.get('FS.AST.PRVT.GD.ZS', {}).get('value') else 'N/D'}% PIB
+
+Ouverture:
+• Exportations: {exports:.1f if exports else 'N/D'}% PIB
+• Importations: {imports:.1f if imports else 'N/D'}% PIB
+• IDE: {fdi:.1f if fdi else 'N/D'}% PIB
+• Transferts: {remittances:.1f if remittances else 'N/D'}% PIB
+
+{'='*70}
+CONSIGNE
+{'-'*40}
+Rédige une analyse structurée en 2 parties:
+
+Partie 1 — Modèle économique:
+- Structure productive (secteurs, poids relatifs)
+- Spécialisation et diversification
+- Forces et fragilités structurelles
+
+Partie 2 — Régime de croissance:
+- Rythme de croissance (historique, tendances)
+- Moteurs de la croissance (demande, investissement, export)
+- Soutenabilité (déséquilibres, vulnérabilités)
+
+Règles:
+- Pas de chiffres inventés
+- Style institutionnel dense
+- ~550 mots
+"""
+    
+    st.text_area("", value=prompt_p2, height=400, key="prompt_p2")
+    if st.button("📋 Copier le prompt", key="copy_p2"):
+        st.success("✅ Copié! (Ctrl+A puis Ctrl+C)")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Statistiques finales
+    total_indicators = total_p1 + total_p2
+    total_available = available_p1 + available_p2
+    coverage = int(100 * total_available / total_indicators) if total_indicators else 0
+    
+    st.markdown(f"""
+    <div class="pillar-divider">
+        <div class="pillar-title">📊 Bilan de la collecte</div>
+        <div class="pillar-stats">
+            <div class="pillar-stat">
+                <span>Total indicateurs:</span>
+                <span class="pillar-stat-val">{total_indicators}</span>
+            </div>
+            <div class="pillar-stat">
+                <span>Indicateurs disponibles:</span>
+                <span class="pillar-stat-val" style="color:#10b981;">{total_available}</span>
+            </div>
+            <div class="pillar-stat">
+                <span>Taux de couverture:</span>
+                <span class="pillar-stat-val" style="color:{'#10b981' if coverage > 70 else '#f59e0b' if coverage > 50 else '#ef4444'};">{coverage}%</span>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Boutons export
+    st.markdown('<div class="export-buttons">', unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("📥 Télécharger PDF", key="export_pdf", use_container_width=True):
+            st.warning("🚧 Fonction PDF en développement")
+    
+    with col2:
+        # Export Excel
+        export_data = {
+            "Indicateur": [],
+            "Valeur": [],
+            "Année": [],
+            "Source": []
+        }
+        
+        # Pilier 1
+        for name, code in [("FH Score", None), ("IDH", None), ("Pauvreté", "SI.POV.DDAY"), ("Gini", "SI.POV.GINI")]:
+            if code:
+                val = wb_data.get(code, {}).get("value")
+                year = wb_data.get(code, {}).get("year")
+            else:
+                val = fh_score if name == "FH Score" else (hdi_val if name == "IDH" else None)
+                year = fh.get("year") if name == "FH Score" else (hdi.get("year") if name == "IDH" else None)
+            
+            export_data["Indicateur"].append(name)
+            export_data["Valeur"].append(val if val else "N/D")
+            export_data["Année"].append(year if year else "N/D")
+            export_data["Source"].append("Freedom House" if name == "FH Score" else ("PNUD" if name == "IDH" else "Banque mondiale"))
+        
+        # Pilier 2
+        for name, code in [("PIB/hab", "NY.GDP.PCAP.CD"), ("Croissance", "NY.GDP.MKTP.KD.ZG"), ("Inflation", "FP.CPI.TOTL.ZG")]:
+            val = wb_data.get(code, {}).get("value")
+            year = wb_data.get(code, {}).get("year")
+            export_data["Indicateur"].append(name)
+            export_data["Valeur"].append(val if val else "N/D")
+            export_data["Année"].append(year if year else "N/D")
+            export_data["Source"].append("Banque mondiale")
+        
+        df_export = pd.DataFrame(export_data)
+        
+        buffer = BytesIO()
+        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+            df_export.to_excel(writer, index=False, sheet_name='Données')
+        
+        st.download_button(
+            label="📊 Exporter Excel",
+            data=buffer.getvalue(),
+            file_name=f"dashboard_{ci['name'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.ms-excel",
+            use_container_width=True
+        )
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Footer
+    st.markdown(f"""
+    <div class="footer">
+        Dashboard généré le {datetime.now().strftime("%d/%m/%Y à %H:%M")} · 
+        AFD — Direction des Études et Recherches · 
+        Sources: Freedom House, PNUD, Banque mondiale
+    </div>
+    """, unsafe_allow_html=True)
