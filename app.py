@@ -889,7 +889,7 @@ if run:
 
 ## Ce qui change
 
-**Logique tableau de bord** — les indicateurs les plus importants (IDH, PIB/hab, croissance, Freedom House, inflation, pauvreté, WGI clés) s'affichent en **grandes cartes KPI** avec valeur mise en avant, couleur de bordure et flèche. Les indicateurs détaillés restent en lignes compactes en dessous.
+# **Logique tableau de bord** - les indicateurs les plus importants (IDH, PIB/hab, croissance, Freedom House, inflation, pauvreté, WGI clés) s'affichent en **grandes cartes KPI** avec valeur mise en avant, couleur de bordure et flèche. Les indicateurs détaillés restent en lignes compactes en dessous.
 
 **Sections plates** — aucun onglet, aucun menu. Tout est visible d'un seul défilement, organisé par thème avec un séparateur discret.
 
