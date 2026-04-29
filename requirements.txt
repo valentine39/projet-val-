@@ -7,3 +7,5 @@ pdfplumber
 numpy
 tabula-py
 plotly
+xlsxwriter
+fpdf
