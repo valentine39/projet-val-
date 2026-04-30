@@ -268,17 +268,47 @@ def make_bar_chart(
         paper_bgcolor="white",
         plot_bgcolor="white",
         font=dict(size=11, color="#4a4843"),
-        margin=dict(l=10, r=10, t=20, b=40),
+        legend=dict(orientation="h", yanchor="bottom", y=-0.35, xanchor="left", x=0),
+        margin=dict(l=10, r=10, t=20, b=65),
         xaxis=dict(gridcolor="#e8e6e2"),
         yaxis=dict(gridcolor="#e8e6e2", ticksuffix=y_suffix),
-        height=260,
-        showlegend=False,
+        height=280,
+        showlegend=True,
     )
     return fig
 
 
 def no_data_placeholder(label: str = ""):
     st.info(f"📭 Donnée non disponible{' : ' + label if label else ''} pour ce pays.")
+
+
+# ── Traduction des termes Banque Mondiale en français ────────────────────────
+
+INCOME_LEVELS_FR = {
+    "Low income": "Faible revenu",
+    "Lower middle income": "Revenu intermédiaire inférieur",
+    "Upper middle income": "Revenu intermédiaire supérieur",
+    "High income": "Revenu élevé",
+    "Not classified": "Non classifié",
+}
+
+REGIONS_FR = {
+    "East Asia & Pacific": "Asie de l'Est & Pacifique",
+    "Europe & Central Asia": "Europe & Asie centrale",
+    "Latin America & Caribbean": "Amérique latine & Caraïbes",
+    "Middle East & North Africa": "Moyen-Orient & Afrique du Nord",
+    "North America": "Amérique du Nord",
+    "South Asia": "Asie du Sud",
+    "Sub-Saharan Africa": "Afrique subsaharienne",
+}
+
+def traduire_revenu(label: str) -> str:
+    """Traduit le niveau de revenu Banque Mondiale en français."""
+    return INCOME_LEVELS_FR.get(label, label)
+
+def traduire_region(label: str) -> str:
+    """Traduit la région Banque Mondiale en français."""
+    return REGIONS_FR.get(label, label)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -307,8 +337,8 @@ with st.sidebar:
 
     selected_row = countries_df[countries_df["name"] == selected_name].iloc[0]
     country_code = selected_row["code"]
-    country_region = selected_row.get("region", "")
-    country_income = selected_row.get("income_level", "")
+    country_region = traduire_region(selected_row.get("region", ""))
+    country_income = traduire_revenu(selected_row.get("income_level", ""))
 
     st.markdown("---")
     st.markdown(f"**Code ISO :** `{country_code}`")
@@ -360,7 +390,7 @@ gdp_badge = f"PIB ~{gdp_kpi['value_display']} Md$" if gdp_kpi and gdp_kpi["value
 pop_kpi = next((k for k in kpis if k["code"] == "SP.POP.TOTL"), None)
 pop_badge = f"Pop. {pop_kpi['value_display']} M" if pop_kpi and pop_kpi["value_raw"] else ""
 
-income_short = country_income.split(":")[0] if ":" in country_income else country_income
+income_short = country_income
 
 st.markdown(f"""
 <div class="dash-header">
