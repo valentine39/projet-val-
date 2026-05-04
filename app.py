@@ -18,7 +18,7 @@ from config import (
     APP_TITLE, APP_SUBTITLE, INDICATORS, COLORS,
     CHART_SERIES, PILIER_META, KPI_CODES, DATA_YEARS
 )
-
+from scrapers.climat_scraper import fetch_all_climate_data
 # ─────────────────────────────────────────────────────────────────────────────
 # CONFIGURATION STREAMLIT
 # ─────────────────────────────────────────────────────────────────────────────
@@ -167,7 +167,9 @@ def load_countries() -> pd.DataFrame:
 def load_all_series(country_code: str) -> dict:
     svc = get_service()
     return svc.get_all_series(country_code)
-
+@st.cache_data(ttl=86400, show_spinner=False)
+def load_climate_data(cc: str) -> dict:
+    return fetch_all_climate_data(cc)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPERS DE RENDU
