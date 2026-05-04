@@ -1,24 +1,22 @@
 # ── scrapers/climat_scraper.py ───────────────────────────────────────────────
-# Scraper pour les données climatiques spécialisées :
-#   - Climate Watch (CAIT) → émissions GES par secteur / gaz
-#   - ND-GAIN Index        → scores vulnérabilité & adaptation
-#   - IEA                  → mix énergétique, intensité carbone
+# Scraper climat multi-pays
 #
-# Ces sources ne disposent pas d'API JSON non-authentifiée fiable ;
-# on utilise donc requests + BeautifulSoup avec plusieurs stratégies
-# (HTML parsing, endpoints JSON embarqués, fallback CDN).
+# Sources :
+#   - Climate Watch / CAIT : émissions GES, secteurs, NDC
+#   - ND-GAIN             : vulnérabilité / readiness climatique
+#   - IEA                 : données énergie quand accessibles
 #
-# Toutes les méthodes retournent un dict avec :
-#   { "value": float|str|None, "year": int|None,
-#     "label": str, "source": str, "source_url": str }
+# Principe :
+#   - Toutes les fonctions prennent un code ISO3 : TLS, FRA, IDN, ZAF, etc.
+#   - Aucune donnée Timor-Leste n'est utilisée pour les autres pays.
+#   - Si une source échoue, on retourne un objet vide mais stable.
 # ─────────────────────────────────────────────────────────────────────────────
 
-import re
-import json
 import requests
-from typing import Optional
+from typing import Optional, Any
 
 TIMEOUT = 20
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -30,24 +28,82 @@ HEADERS = {
 }
 
 
-def _get(url: str, params: dict = None, json_mode: bool = False) -> Optional[dict | str]:
+# ─────────────────────────────────────────────────────────────────────────────
+# OUTILS GÉNÉRIQUES
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _get(
+    url: str,
+    params: Optional[dict] = None,
+    json_mode: bool = False,
+) -> Optional[Any]:
+    """
+    Requête GET robuste.
+    Retourne None si la source ne répond pas ou si le format est invalide.
+    """
     try:
-        r = requests.get(url, params=params, headers=HEADERS, timeout=TIMEOUT)
-        r.raise_for_status()
-        return r.json() if json_mode else r.text
+        response = requests.get(
+            url,
+            params=params,
+            headers=HEADERS,
+            timeout=TIMEOUT,
+        )
+        response.raise_for_status()
+        return response.json() if json_mode else response.text
     except Exception:
         return None
 
 
+ISO3_TO_ISO2 = {
+    "TLS": "TL", "FRA": "FR", "DEU": "DE", "GBR": "GB", "USA": "US",
+    "CHN": "CN", "JPN": "JP", "KOR": "KR", "PRK": "KP", "IND": "IN",
+    "IDN": "ID", "VNM": "VN", "THA": "TH", "PHL": "PH", "MYS": "MY",
+    "SGP": "SG", "KHM": "KH", "LAO": "LA", "MMR": "MM",
+
+    "AUS": "AU", "NZL": "NZ", "PNG": "PG", "FJI": "FJ",
+
+    "ITA": "IT", "ESP": "ES", "PRT": "PT", "NLD": "NL", "BEL": "BE",
+    "CHE": "CH", "AUT": "AT", "SWE": "SE", "NOR": "NO", "DNK": "DK",
+    "FIN": "FI", "IRL": "IE", "POL": "PL", "CZE": "CZ", "SVK": "SK",
+    "HUN": "HU", "ROU": "RO", "BGR": "BG", "GRC": "GR", "UKR": "UA",
+    "RUS": "RU",
+
+    "CAN": "CA", "MEX": "MX", "BRA": "BR", "ARG": "AR", "COL": "CO",
+    "PER": "PE", "CHL": "CL", "ECU": "EC", "BOL": "BO", "URY": "UY",
+    "PRY": "PY", "VEN": "VE",
+
+    "MAR": "MA", "DZA": "DZ", "TUN": "TN", "EGY": "EG", "TUR": "TR",
+    "SAU": "SA", "ARE": "AE", "QAT": "QA", "KWT": "KW", "IRN": "IR",
+    "IRQ": "IQ", "ISR": "IL", "JOR": "JO", "LBN": "LB",
+
+    "ZAF": "ZA", "NGA": "NG", "ETH": "ET", "KEN": "KE", "GHA": "GH",
+    "SEN": "SN", "CIV": "CI", "CMR": "CM", "COD": "CD", "COG": "CG",
+    "GAB": "GA", "AGO": "AO", "MOZ": "MZ", "TZA": "TZ", "UGA": "UG",
+    "RWA": "RW", "MDG": "MG", "MLI": "ML", "NER": "NE", "BFA": "BF",
+    "BEN": "BJ", "TGO": "TG", "GIN": "GN", "GNB": "GW", "LBR": "LR",
+    "SLE": "SL", "MRT": "MR", "COM": "KM", "DJI": "DJ", "ZMB": "ZM",
+    "ZWE": "ZW", "MWI": "MW", "NAM": "NA", "BWA": "BW", "MUS": "MU",
+    "SYC": "SC",
+}
+
+
+def _iso3_to_iso2(iso3: str) -> str:
+    """
+    Convertit ISO3 → ISO2.
+    Important pour éviter les erreurs du type PRK → PR au lieu de KP.
+    """
+    if not iso3:
+        return ""
+    iso3 = iso3.upper()
+    return ISO3_TO_ISO2.get(iso3, iso3[:2])
+
+
 # ─────────────────────────────────────────────────────────────────────────────
-# CLIMATE WATCH — CAIT GHG Emissions API
-# Docs : https://www.climatewatchdata.org/api/v1/data/historical_emissions
+# CLIMATE WATCH — CAIT
 # ─────────────────────────────────────────────────────────────────────────────
 
 CW_BASE = "https://www.climatewatchdata.org/api/v1/data"
-CW_SOURCE_URL = "https://www.climatewatchdata.org/countries/TLS"
 
-# Mapping secteur CAIT → label FR
 CW_SECTOR_LABELS = {
     "Total excluding LUCF": "Total GES (hors UTCATF)",
     "Total including LUCF": "Total GES (avec UTCATF)",
@@ -58,12 +114,11 @@ CW_SECTOR_LABELS = {
     "Industrial Processes": "Procédés industriels",
 }
 
-# Mapping gaz CAIT
 CW_GAS_LABELS = {
-    "All GHG": "Tous GES (MtCO₂eq)",
-    "CO2": "CO₂ (MtCO₂)",
-    "CH4": "CH₄ (MtCO₂eq)",
-    "N2O": "N₂O (MtCO₂eq)",
+    "All GHG": "Tous GES",
+    "CO2": "CO₂",
+    "CH4": "CH₄",
+    "N2O": "N₂O",
 }
 
 
@@ -73,152 +128,178 @@ def fetch_cw_emissions(
     gas: str = "All GHG",
 ) -> dict:
     """
-    Récupère les émissions GES historiques depuis l'API Climate Watch (CAIT).
-    Retourne la dernière valeur connue + la série complète.
+    Récupère la série historique d'émissions GES depuis Climate Watch / CAIT.
+    Retourne la dernière valeur disponible + la série complète.
     """
+
+    iso3 = iso3.upper()
+
     result = {
-        "label": f"Émissions GES — {CW_SECTOR_LABELS.get(sector, sector)} ({CW_GAS_LABELS.get(gas, gas)})",
+        "label": (
+            f"Émissions GES — "
+            f"{CW_SECTOR_LABELS.get(sector, sector)} "
+            f"({CW_GAS_LABELS.get(gas, gas)})"
+        ),
         "value": None,
         "year": None,
         "series": [],
         "unit": "MtCO₂eq",
         "source": "Climate Watch — CAIT GHG Emissions",
-        "source_url": CW_SOURCE_URL,
+        "source_url": f"https://www.climatewatchdata.org/countries/{iso3}",
     }
 
-    try:
+    data = _get(
+        f"{CW_BASE}/historical_emissions",
+        params={
+            "regions": iso3,
+            "source": "CAIT",
+            "gas": gas,
+            "sector": sector,
+            "start_year": 1990,
+            "end_year": 2023,
+        },
+        json_mode=True,
+    )
+
+    if not data:
         data = _get(
             f"{CW_BASE}/historical_emissions",
             params={
                 "regions[]": iso3,
-                "source_ids[]": 1,       # CAIT
-                "gas_ids[]": 1 if gas == "All GHG" else 2,
-                "sector_ids[]": None,
+                "source_ids[]": 1,
+                "gas_ids[]": 1,
             },
             json_mode=True,
         )
 
-        # Fallback : endpoint alternatif avec paramètres nommés
-        if not data:
-            data = _get(
-                f"{CW_BASE}/historical_emissions",
-                params={
-                    "regions": iso3,
-                    "source": "CAIT",
-                    "gas": gas,
-                    "sector": sector,
-                    "start_year": 1990,
-                    "end_year": 2022,
-                },
-                json_mode=True,
-            )
+    if not data:
+        return result
 
-        if not data:
-            return result
+    records = data if isinstance(data, list) else data.get("data", [])
 
-        # Parser la réponse (structure : {"data": [{"emissions": {year: value, ...}}]})
-        records = data if isinstance(data, list) else data.get("data", [])
-        for record in records:
-            if not isinstance(record, dict):
-                continue
+    for record in records:
+        if not isinstance(record, dict):
+            continue
 
-            emissions = record.get("emissions", {})
-            if not emissions:
-                continue
+        record_sector = record.get("sector", {})
+        if isinstance(record_sector, dict):
+            record_sector = record_sector.get("name", "")
 
-            series = []
-            for yr_str, val in emissions.items():
-                try:
+        record_gas = record.get("gas", {})
+        if isinstance(record_gas, dict):
+            record_gas = record_gas.get("name", "")
+
+        if sector and record_sector and record_sector != sector:
+            continue
+
+        if gas and record_gas and record_gas != gas:
+            continue
+
+        emissions = record.get("emissions", {})
+        if not isinstance(emissions, dict):
+            continue
+
+        series = []
+        for year_str, value in emissions.items():
+            try:
+                if value is not None:
                     series.append({
-                        "year": int(yr_str),
-                        "value": float(val) if val is not None else None,
+                        "year": int(year_str),
+                        "value": float(value),
                     })
-                except (ValueError, TypeError):
-                    continue
+            except Exception:
+                continue
 
-            series = sorted(
-                [s for s in series if s["value"] is not None],
-                key=lambda x: x["year"],
-            )
-            if series:
-                result["series"] = series
-                latest = series[-1]
-                result["value"] = latest["value"]
-                result["year"] = latest["year"]
-                break
+        series = sorted(series, key=lambda x: x["year"])
 
-    except Exception:
-        pass
+        if series:
+            result["series"] = series
+            result["value"] = series[-1]["value"]
+            result["year"] = series[-1]["year"]
+            return result
 
     return result
 
 
-def fetch_cw_emissions_by_sector(iso3: str = "TLS") -> list:
+def fetch_cw_emissions_by_sector(iso3: str = "TLS") -> list[dict]:
     """
-    Récupère les émissions par secteur (dernière année disponible).
-    Utile pour un graphique en donut.
+    Récupère les émissions par secteur pour la dernière année disponible.
+    Sert à construire un graphique de répartition sectorielle.
     """
-    try:
-        data = _get(
-            f"{CW_BASE}/historical_emissions",
-            params={
-                "regions": iso3,
-                "source": "CAIT",
-                "gas": "All GHG",
-                "start_year": 2018,
-                "end_year": 2022,
-            },
-            json_mode=True,
+
+    iso3 = iso3.upper()
+
+    data = _get(
+        f"{CW_BASE}/historical_emissions",
+        params={
+            "regions": iso3,
+            "source": "CAIT",
+            "gas": "All GHG",
+            "start_year": 2018,
+            "end_year": 2023,
+        },
+        json_mode=True,
+    )
+
+    if not data:
+        return []
+
+    records = data if isinstance(data, list) else data.get("data", [])
+    sectors = {}
+
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+
+        sector_obj = record.get("sector", {})
+        sector_name = (
+            sector_obj.get("name", "")
+            if isinstance(sector_obj, dict)
+            else str(sector_obj)
         )
 
-        if not data:
-            return []
+        if not sector_name or "Total" in sector_name:
+            continue
 
-        records = data if isinstance(data, list) else data.get("data", [])
-        sectors = {}
-        for record in records:
-            if not isinstance(record, dict):
-                continue
-            sector_obj = record.get("sector", {})
-            sector_name = (
-                sector_obj.get("name", "")
-                if isinstance(sector_obj, dict)
-                else str(sector_obj)
-            )
+        emissions = record.get("emissions", {})
+        if not isinstance(emissions, dict):
+            continue
 
-            # Garder uniquement les secteurs principaux (pas "Total")
-            if "Total" in sector_name or not sector_name:
+        valid_values = {}
+        for year_str, value in emissions.items():
+            try:
+                if value is not None:
+                    valid_values[int(year_str)] = float(value)
+            except Exception:
                 continue
 
-            emissions = record.get("emissions", {})
-            if not emissions:
-                continue
+        if valid_values:
+            latest_year = max(valid_values)
+            latest_value = valid_values[latest_year]
 
-            # Prendre la valeur la plus récente
-            valid = {int(k): v for k, v in emissions.items() if v is not None}
-            if valid:
-                latest_yr = max(valid.keys())
-                sectors[sector_name] = {"value": valid[latest_yr], "year": latest_yr}
+            if latest_value > 0:
+                sectors[sector_name] = {
+                    "value": latest_value,
+                    "year": latest_year,
+                }
 
-        return [
-            {
-                "sector": CW_SECTOR_LABELS.get(k, k),
-                "value": v["value"],
-                "year": v["year"],
-            }
-            for k, v in sectors.items()
-            if v["value"] > 0
-        ]
-
-    except Exception:
-        return []
+    return [
+        {
+            "sector": CW_SECTOR_LABELS.get(sector_name, sector_name),
+            "value": item["value"],
+            "year": item["year"],
+        }
+        for sector_name, item in sectors.items()
+    ]
 
 
 def fetch_cw_ndc(iso3: str = "TLS") -> dict:
     """
-    Récupère les engagements NDC (Nationally Determined Contributions)
-    depuis Climate Watch.
+    Récupère les informations NDC depuis Climate Watch quand disponibles.
     """
+
+    iso3 = iso3.upper()
+
     result = {
         "unconditional_target": None,
         "conditional_target": None,
@@ -228,92 +309,70 @@ def fetch_cw_ndc(iso3: str = "TLS") -> dict:
         "source_url": f"https://www.climatewatchdata.org/ndc-tracker/{iso3.lower()}",
     }
 
-    try:
+    data = _get(
+        f"{CW_BASE}/ndc_texts",
+        params={"countries[]": iso3},
+        json_mode=True,
+    )
+
+    if not data:
         data = _get(
-            f"{CW_BASE}/ndc_texts",
-            params={"countries[]": iso3},
+            "https://www.climatewatchdata.org/api/v1/ndcs",
+            params={"countries[]": iso3, "source": "NDC"},
             json_mode=True,
         )
 
-        # Endpoint alternatif
-        if not data:
-            data = _get(
-                "https://www.climatewatchdata.org/api/v1/ndcs",
-                params={"countries[]": iso3, "source": "NDC"},
-                json_mode=True,
-            )
+    if not data:
+        return result
 
-        if data:
-            records = data if isinstance(data, list) else data.get("data", [])
-            for rec in records[:3]:
-                if not isinstance(rec, dict):
-                    continue
-                for key, val in rec.items():
-                    skey = str(key).lower()
-                    if "unconditional" in skey and result["unconditional_target"] is None:
-                        result["unconditional_target"] = str(val)[:200] if val else None
-                    elif "conditional" in skey and result["conditional_target"] is None:
-                        result["conditional_target"] = str(val)[:200] if val else None
+    records = data if isinstance(data, list) else data.get("data", [])
 
-    except Exception:
-        pass
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+
+        for key, value in record.items():
+            key_lower = str(key).lower()
+
+            if value in [None, "", []]:
+                continue
+
+            value_str = str(value)[:250]
+
+            if (
+                "unconditional" in key_lower
+                and result["unconditional_target"] is None
+            ):
+                result["unconditional_target"] = value_str
+
+            elif (
+                "conditional" in key_lower
+                and "unconditional" not in key_lower
+                and result["conditional_target"] is None
+            ):
+                result["conditional_target"] = value_str
+
+            elif "base" in key_lower and "year" in key_lower:
+                result["base_year"] = value_str
+
+            elif "net" in key_lower and "zero" in key_lower:
+                result["net_zero_year"] = value_str
 
     return result
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ND-GAIN — Notre Dame Global Adaptation Initiative
-# https://gain.nd.edu/our-work/country-index/
+# ND-GAIN
 # ─────────────────────────────────────────────────────────────────────────────
-
-NDGAIN_SOURCE_URL = "https://gain-new.crc.nd.edu/country/timor-leste"
-
-# Données ND-GAIN brutes pour Timor-Leste (série historique 1995–2021)
-# Source : Notre Dame Global Adaptation Initiative — données publiques téléchargeables
-# https://gain.nd.edu/our-work/country-index/download-data/
-NDGAIN_TLS_STATIC = {
-    "overall": [
-        (1995, 29.9), (1996, 30.1), (1997, 30.0), (1998, 29.5), (1999, 29.3),
-        (2000, 30.5), (2001, 31.2), (2002, 32.1), (2003, 33.0), (2004, 33.8),
-        (2005, 34.5), (2006, 35.2), (2007, 35.8), (2008, 36.4), (2009, 36.9),
-        (2010, 37.3), (2011, 37.8), (2012, 38.2), (2013, 38.6), (2014, 38.9),
-        (2015, 39.2), (2016, 39.4), (2017, 39.6), (2018, 39.8), (2019, 40.0),
-        (2020, 40.1), (2021, 40.3),
-    ],
-    "vulnerability": [
-        (1995, 0.612), (1998, 0.608), (2000, 0.598), (2005, 0.579),
-        (2010, 0.560), (2015, 0.530), (2018, 0.510), (2020, 0.498), (2021, 0.493),
-    ],
-    "readiness": [
-        (1995, 0.148), (2000, 0.162), (2005, 0.188), (2010, 0.215),
-        (2015, 0.245), (2018, 0.268), (2020, 0.278), (2021, 0.283),
-    ],
-    # Sous-scores vulnérabilité (2021)
-    "vulnerability_components": {
-        "Alimentation": 0.68,
-        "Eau": 0.72,
-        "Santé": 0.61,
-        "Écosystèmes": 0.59,
-        "Habitat humain": 0.55,
-        "Infrastructure": 0.63,
-    },
-    # Sous-scores readiness (2021)
-    "readiness_components": {
-        "Économique": 0.21,
-        "Gouvernance": 0.31,
-        "Social": 0.38,
-    },
-    "rank_2021": 140,
-    "total_countries": 185,
-    "source_note": "ND-GAIN Country Index — Notre Dame University (2021)",
-}
-
 
 def fetch_ndgain(iso3: str = "TLS") -> dict:
     """
-    Récupère le score ND-GAIN. Tente l'API publique, sinon utilise
-    les données statiques pour Timor-Leste (TLS).
+    Récupère le score ND-GAIN quand l'endpoint répond.
+    Si l'endpoint ne répond pas, retourne un résultat vide.
     """
+
+    iso3 = iso3.upper()
+
     result = {
         "score": None,
         "vulnerability": None,
@@ -326,157 +385,84 @@ def fetch_ndgain(iso3: str = "TLS") -> dict:
         "vulnerability_components": {},
         "readiness_components": {},
         "source": "ND-GAIN Country Index — Notre Dame University",
-        "source_url": NDGAIN_SOURCE_URL,
+        "source_url": f"https://gain-new.crc.nd.edu/country/{iso3.lower()}",
     }
 
-    try:
-        raw = _get(
-            f"https://gain-new.crc.nd.edu/api/countries/{iso3.lower()}",
-            json_mode=True,
-        )
+    raw = _get(
+        f"https://gain-new.crc.nd.edu/api/countries/{iso3.lower()}",
+        json_mode=True,
+    )
 
-        if raw and isinstance(raw, dict):
-            result["score"]         = raw.get("gain_score") or raw.get("overall")
-            result["vulnerability"] = raw.get("vulnerability")
-            result["readiness"]     = raw.get("readiness")
-            result["rank"]          = raw.get("rank")
-            result["year"]          = raw.get("year", 2021)
-        else:
-            # Fallback données statiques TLS uniquement
-            if iso3.upper() == "TLS":
-                static = NDGAIN_TLS_STATIC
-                if static["overall"]:
-                    last = static["overall"][-1]
-                    result["score"] = last[1]
-                    result["year"]  = last[0]
-                if static["vulnerability"]:
-                    result["vulnerability"] = static["vulnerability"][-1][1]
-                if static["readiness"]:
-                    result["readiness"] = static["readiness"][-1][1]
-                result["rank"] = static["rank_2021"]
-                result["series_overall"] = [
-                    {"year": y, "value": v} for y, v in static["overall"]
-                ]
-                result["series_vulnerability"] = [
-                    {"year": y, "value": v} for y, v in static["vulnerability"]
-                ]
-                result["series_readiness"] = [
-                    {"year": y, "value": v} for y, v in static["readiness"]
-                ]
-                result["vulnerability_components"] = static["vulnerability_components"]
-                result["readiness_components"]     = static["readiness_components"]
-                result["source"] = static["source_note"]
+    if not raw or not isinstance(raw, dict):
+        return result
 
-    except Exception:
-        pass
+    result["score"] = (
+        raw.get("gain_score")
+        or raw.get("overall")
+        or raw.get("score")
+    )
+    result["vulnerability"] = raw.get("vulnerability")
+    result["readiness"] = raw.get("readiness")
+    result["rank"] = raw.get("rank")
+    result["year"] = raw.get("year")
+
+    series = raw.get("series") or raw.get("data") or []
+
+    if isinstance(series, list):
+        for item in series:
+            if not isinstance(item, dict):
+                continue
+
+            year = item.get("year")
+            try:
+                year = int(year)
+            except Exception:
+                continue
+
+            if item.get("gain_score") is not None:
+                result["series_overall"].append({
+                    "year": year,
+                    "value": float(item["gain_score"]),
+                })
+
+            if item.get("vulnerability") is not None:
+                result["series_vulnerability"].append({
+                    "year": year,
+                    "value": float(item["vulnerability"]),
+                })
+
+            if item.get("readiness") is not None:
+                result["series_readiness"].append({
+                    "year": year,
+                    "value": float(item["readiness"]),
+                })
+
+    result["series_overall"].sort(key=lambda x: x["year"])
+    result["series_vulnerability"].sort(key=lambda x: x["year"])
+    result["series_readiness"].sort(key=lambda x: x["year"])
 
     return result
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# IEA — International Energy Agency
-# API ouverte : https://api.iea.org/stats/
+# IEA
 # ─────────────────────────────────────────────────────────────────────────────
 
 IEA_BASE = "https://api.iea.org/stats"
-IEA_SOURCE_URL = "https://www.iea.org/countries/timor-leste"
-
-# Données IEA statiques pour Timor-Leste (2022)
-# Source : IEA World Energy Balances — données publiques résumées
-IEA_TLS_STATIC = {
-    "mix_electricity_2022": {
-        "Pétrole/Diesel": 84.5,
-        "Solaire PV": 9.8,
-        "Hydroélectricité": 3.9,
-        "Bioénergie": 1.4,
-        "Autre": 0.4,
-    },
-    "total_energy_supply_2022_mtoe": 0.49,
-    "co2_energy_2022_mt": 0.62,
-    "co2_per_gdp_2022": None,
-    "electricity_access_pct": 82.0,
-    "renewable_share_2022": 15.5,
-    "energy_intensity": None,
-    "series_renewable": [
-        (2010, 4.2),  (2012, 5.8),  (2014, 7.2),  (2016, 9.0),
-        (2018, 11.5), (2019, 12.8), (2020, 13.9), (2021, 14.6), (2022, 15.5),
-    ],
-    "series_co2_energy": [
-        (2010, 0.28), (2012, 0.35), (2014, 0.44), (2016, 0.50),
-        (2018, 0.55), (2019, 0.57), (2020, 0.54), (2021, 0.59), (2022, 0.62),
-    ],
-    "source_note": "IEA World Energy Balances 2023 — Timor-Leste",
-}
-
-# ── Table de correspondance ISO3 → ISO2 ──────────────────────────────────────
-# Évite de tronquer aveuglément cc[:2] ce qui donne des codes incorrects
-# (ex : "DEU"[:2] = "DE" ✓ mais "NLD"[:2] = "NL" ✓ vs "NZL"[:2] = "NZ" ✓,
-#  en revanche "PRK"[:2] = "PR" ✗ au lieu de "KP")
-ISO3_TO_ISO2 = {
-    # Asie-Pacifique
-    "TLS": "TL", "CHN": "CN", "JPN": "JP", "KOR": "KR", "PRK": "KP",
-    "IND": "IN", "PAK": "PK", "BGD": "BD", "LKA": "LK", "NPL": "NP",
-    "AFG": "AF", "MMR": "MM", "THA": "TH", "VNM": "VN", "KHM": "KH",
-    "LAO": "LA", "MYS": "MY", "SGP": "SG", "IDN": "ID", "PHL": "PH",
-    "TWN": "TW", "HKG": "HK", "MAC": "MO", "MNG": "MN", "KAZ": "KZ",
-    "UZB": "UZ", "TKM": "TM", "KGZ": "KG", "TJK": "TJ", "AZE": "AZ",
-    "ARM": "AM", "GEO": "GE",
-    # Océanie
-    "AUS": "AU", "NZL": "NZ", "PNG": "PG", "FJI": "FJ", "SLB": "SB",
-    "VUT": "VU", "WSM": "WS", "TON": "TO", "KIR": "KI", "FSM": "FM",
-    "PLW": "PW", "MHL": "MH", "NRU": "NR", "TUV": "TV",
-    # Europe
-    "FRA": "FR", "DEU": "DE", "GBR": "GB", "ITA": "IT", "ESP": "ES",
-    "PRT": "PT", "NLD": "NL", "BEL": "BE", "CHE": "CH", "AUT": "AT",
-    "SWE": "SE", "NOR": "NO", "DNK": "DK", "FIN": "FI", "ISL": "IS",
-    "IRL": "IE", "LUX": "LU", "MLT": "MT", "CYP": "CY", "GRC": "GR",
-    "POL": "PL", "CZE": "CZ", "SVK": "SK", "HUN": "HU", "ROU": "RO",
-    "BGR": "BG", "HRV": "HR", "SVN": "SI", "EST": "EE", "LVA": "LV",
-    "LTU": "LT", "UKR": "UA", "BLR": "BY", "MDA": "MD", "RUS": "RU",
-    "SRB": "RS", "BIH": "BA", "MNE": "ME", "MKD": "MK", "ALB": "AL",
-    "XKX": "XK", "AND": "AD", "MCO": "MC", "SMR": "SM", "LIE": "LI",
-    "VAT": "VA",
-    # Amériques
-    "USA": "US", "CAN": "CA", "MEX": "MX", "BRA": "BR", "ARG": "AR",
-    "COL": "CO", "VEN": "VE", "PER": "PE", "CHL": "CL", "ECU": "EC",
-    "BOL": "BO", "PRY": "PY", "URY": "UY", "GUY": "GY", "SUR": "SR",
-    "TTO": "TT", "JAM": "JM", "HTI": "HT", "DOM": "DO", "CUB": "CU",
-    "PRI": "PR", "GTM": "GT", "HND": "HN", "SLV": "SV", "NIC": "NI",
-    "CRI": "CR", "PAN": "PA", "BLZ": "BZ",
-    # Moyen-Orient & Afrique du Nord
-    "SAU": "SA", "IRN": "IR", "IRQ": "IQ", "ARE": "AE", "QAT": "QA",
-    "KWT": "KW", "BHR": "BH", "OMN": "OM", "YEM": "YE", "JOR": "JO",
-    "LBN": "LB", "SYR": "SY", "ISR": "IL", "PSE": "PS", "TUR": "TR",
-    "MAR": "MA", "DZA": "DZ", "TUN": "TN", "LBY": "LY", "EGY": "EG",
-    # Afrique subsaharienne
-    "NGA": "NG", "ZAF": "ZA", "ETH": "ET", "COD": "CD", "TZA": "TZ",
-    "KEN": "KE", "GHA": "GH", "MOZ": "MZ", "MDG": "MG", "CMR": "CM",
-    "CIV": "CI", "NER": "NE", "MLI": "ML", "BFA": "BF", "SEN": "SN",
-    "TCD": "TD", "GIN": "GN", "RWA": "RW", "BEN": "BJ", "SOM": "SO",
-    "ZMB": "ZM", "ZWE": "ZW", "MWI": "MW", "UGA": "UG", "AGO": "AO",
-    "SDN": "SD", "SSD": "SS", "CAF": "CF", "COG": "CG", "GAB": "GA",
-    "GNB": "GW", "GNQ": "GQ", "SLE": "SL", "LBR": "LR", "MRT": "MR",
-    "GMB": "GM", "CPV": "CV", "STP": "ST", "COM": "KM", "DJI": "DJ",
-    "ERI": "ER", "LSO": "LS", "SWZ": "SZ", "BWA": "BW", "NAM": "NA",
-    "MUS": "MU", "SYC": "SC", "SWZ": "SZ",
-}
 
 
-def _iso3_to_iso2(iso3: str) -> str:
+def fetch_iea(
+    country_iso2: Optional[str] = None,
+    iso3: str = "TLS",
+) -> dict:
     """
-    Convertit un code ISO3 en ISO2.
-    Utilise la table de correspondance, fallback sur les 2 premiers caractères.
+    Récupère les données énergie IEA quand l'API publique répond.
+    Pour les pays non couverts ou si l'API change, retourne un résultat vide.
     """
-    return ISO3_TO_ISO2.get(iso3.upper(), iso3[:2].upper())
 
+    iso3 = iso3.upper()
+    country_iso2 = country_iso2 or _iso3_to_iso2(iso3)
 
-def fetch_iea(country_iso2: str = "TL", iso3: str = "TLS") -> dict:
-    """
-    Récupère les données IEA pour un pays.
-    - Tente l'API publique IEA (endpoint non-authentifié)
-    - Si échec et pays = TLS → données statiques embarquées
-    - Sinon → retourne un résultat vide sans lever d'exception
-    """
     result = {
         "mix_electricity": {},
         "renewable_share": None,
@@ -485,56 +471,67 @@ def fetch_iea(country_iso2: str = "TL", iso3: str = "TLS") -> dict:
         "electricity_access": None,
         "series_renewable": [],
         "series_co2_energy": [],
-        "year": 2022,
+        "year": None,
         "source": "IEA — World Energy Balances",
-        "source_url": IEA_SOURCE_URL,
+        "source_url": f"https://www.iea.org/countries/{country_iso2.lower()}",
     }
 
-    try:
-        # Tentative API IEA (endpoint public non-authentifié)
-        api_data = _get(
-            f"{IEA_BASE}/indicator/CO2",
-            params={"country": country_iso2},
-            json_mode=True,
-        )
+    co2_data = _get(
+        f"{IEA_BASE}/indicator/CO2",
+        params={"country": country_iso2},
+        json_mode=True,
+    )
 
-        if api_data and isinstance(api_data, (list, dict)):
-            records = api_data if isinstance(api_data, list) else api_data.get("data", [])
-            series = []
-            for rec in records:
-                if isinstance(rec, dict):
-                    yr  = rec.get("year")  or rec.get("Year")
-                    val = rec.get("value") or rec.get("Value")
-                    if yr and val:
-                        try:
-                            series.append({"year": int(yr), "value": float(val)})
-                        except (ValueError, TypeError):
-                            continue
-            if series:
-                series.sort(key=lambda x: x["year"])
-                result["series_co2_energy"] = series
-                result["co2_energy_mt"]     = series[-1]["value"]
-                result["year"]              = series[-1]["year"]
-                return result
+    if not co2_data:
+        return result
 
-        # Fallback données statiques — Timor-Leste uniquement
-        if iso3.upper() == "TLS":
-            static = IEA_TLS_STATIC
-            result["mix_electricity"]   = static["mix_electricity_2022"]
-            result["renewable_share"]   = static["renewable_share_2022"]
-            result["co2_energy_mt"]     = static["co2_energy_2022_mt"]
-            result["total_supply_mtoe"] = static["total_energy_supply_2022_mtoe"]
-            result["electricity_access"] = static["electricity_access_pct"]
-            result["series_renewable"]  = [
-                {"year": y, "value": v} for y, v in static["series_renewable"]
-            ]
-            result["series_co2_energy"] = [
-                {"year": y, "value": v} for y, v in static["series_co2_energy"]
-            ]
-            result["source"] = static["source_note"]
+    records = co2_data if isinstance(co2_data, list) else co2_data.get("data", [])
 
-    except Exception:
-        # Ne jamais laisser une exception remonter depuis un scraper
-        pass
+    series = []
+
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+
+        year = record.get("year") or record.get("Year")
+        value = record.get("value") or record.get("Value")
+
+        try:
+            if year is not None and value is not None:
+                series.append({
+                    "year": int(year),
+                    "value": float(value),
+                })
+        except Exception:
+            continue
+
+    series.sort(key=lambda x: x["year"])
+
+    if series:
+        result["series_co2_energy"] = series
+        result["co2_energy_mt"] = series[-1]["value"]
+        result["year"] = series[-1]["year"]
 
     return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AGRÉGATEUR OPTIONNEL
+# ─────────────────────────────────────────────────────────────────────────────
+
+def fetch_all_climate_data(iso3: str = "TLS") -> dict:
+    """
+    Fonction pratique : récupère toutes les données climat pour un pays.
+    Tu peux l'utiliser directement dans Streamlit.
+    """
+
+    iso3 = iso3.upper()
+    iso2 = _iso3_to_iso2(iso3)
+
+    return {
+        "ndgain": fetch_ndgain(iso3),
+        "iea": fetch_iea(iso2, iso3),
+        "cw_total": fetch_cw_emissions(iso3),
+        "cw_sectors": fetch_cw_emissions_by_sector(iso3),
+        "cw_ndc": fetch_cw_ndc(iso3),
+    }
