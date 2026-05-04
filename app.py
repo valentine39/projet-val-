@@ -788,415 +788,124 @@ elif active_pilier == 5:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PILIER 6 — RISQUES CLIMAT & NATURE
-# Sources : Banque Mondiale WDI · Climate Watch (CAIT) · ND-GAIN · IEA
-# ─────────────────────────────────────────────────────────────────────────────
-
 elif active_pilier == 6:
-    from scrapers.climat_scraper import fetch_all_climate_data
 
     pm = PILIER_META[6]
     st.markdown(f"### {pm['icon']} Pilier 6 — {pm['label']}")
     st.caption(pm["description"])
 
-    # ── Chargement des données spécialisées (avec cache) ──────────────────────
-    @st.cache_data(ttl=86400, show_spinner=False)
-def load_climate_data(cc: str) -> dict:
-    return fetch_all_climate_data(cc)
-
+    # ─────────────────────────────────────────────────────────────
+    # CHARGEMENT DONNÉES
+    # ─────────────────────────────────────────────────────────────
     with st.spinner("Chargement des données climatiques spécialisées…"):
         clim = load_climate_data(country_code)
 
-    ndgain  = clim["ndgain"]
-    iea     = clim["iea"]
-    cw_tot  = clim["cw_total"]
-    cw_sec  = clim["cw_sectors"]
-    cw_ndc  = clim["cw_ndc"]
+    ndgain = clim.get("ndgain", {})
+    iea = clim.get("iea", {})
+    cw_tot = clim.get("cw_total", {})
+    cw_sec = clim.get("cw_sectors", [])
+    cw_ndc = clim.get("cw_ndc", {})
 
-    # ── Valeurs pour le ribbon ─────────────────────────────────────────────────
-    co2pc_kpi  = next((k for k in kpis if k["code"] == "EN.ATM.CO2E.PC"), None)
-    forest_kpi = next((k for k in kpis if k["code"] == "AG.LND.FRST.ZS"), None)
-    renew_kpi  = next((k for k in kpis if k["code"] == "EG.ELC.RNEW.ZS"), None)
+    # ─────────────────────────────────────────────────────────────
+    # OVERVIEW
+    # ─────────────────────────────────────────────────────────────
+    ndgain_score = ndgain.get("score")
+    ndgain_rank = ndgain.get("rank")
 
-    co2pc_val  = co2pc_kpi["value_display"]  if co2pc_kpi  and co2pc_kpi["value_raw"]  else "N/D"
-    forest_val = forest_kpi["value_display"] if forest_kpi and forest_kpi["value_raw"] else "N/D"
-    ndgain_score = f"{ndgain['score']:.1f}" if ndgain.get("score") else "N/D"
-    ndgain_rank  = f"{ndgain['rank']}" if ndgain.get("rank") else "N/D"
-    renew_iea   = f"{iea['renewable_share']:.1f}" if iea.get("renewable_share") else (
-        renew_kpi["value_display"] if renew_kpi and renew_kpi["value_raw"] else "N/D"
-    )
+    co2_energy = iea.get("co2_energy_mt")
+    renewable = iea.get("renewable_share")
+
+    ges_value = cw_tot.get("value")
 
     st.markdown(f"""
     <div class="overview-ribbon">
-        <strong>Émissions CO₂</strong> : <strong>{co2pc_val} t/hab.</strong> (Banque Mondiale).
-        <strong>Renouvelables</strong> dans le mix électrique : <strong>{renew_iea}%</strong> (IEA {iea.get('year', '')}).
-        <strong>Couverture forestière</strong> : <strong>{forest_val}%</strong> du territoire.
-        <strong>Score ND-GAIN</strong> : <strong>{ndgain_score}/100</strong>
-        (rang <strong>{ndgain_rank}/{ndgain.get('_total', 185)}</strong> — vulnérabilité climatique & capacité d'adaptation).
+        <strong>Score ND-GAIN</strong> : <strong>{ndgain_score if ndgain_score else "N/D"}</strong>
+        (rang {ndgain_rank if ndgain_rank else "N/D"}).<br>
+        <strong>Émissions énergie</strong> : <strong>{co2_energy if co2_energy else "N/D"} Mt CO₂</strong>.<br>
+        <strong>Part renouvelables</strong> : <strong>{renewable if renewable else "N/D"}%</strong>.<br>
+        <strong>GES totales</strong> : <strong>{ges_value if ges_value else "N/D"} MtCO₂eq</strong>.
     </div>
     """, unsafe_allow_html=True)
 
-    # ── SECTION 1 : KPIs Banque Mondiale ──────────────────────────────────────
-    st.markdown('<div class="sub-label">Indicateurs environnementaux — Banque Mondiale WDI</div>', unsafe_allow_html=True)
-    clim_codes = ["EN.ATM.CO2E.PC", "EG.ELC.RNEW.ZS", "AG.LND.FRST.ZS", "EG.USE.PCAP.KG.OE"]
-    clim_kpis  = [k for k in kpis if k["code"] in clim_codes]
+    # ─────────────────────────────────────────────────────────────
+    # KPIs
+    # ─────────────────────────────────────────────────────────────
+    st.markdown('<div class="sub-label">Indicateurs clés</div>', unsafe_allow_html=True)
 
-    cols = st.columns(max(len(clim_kpis), 1))
-    for col, kpi in zip(cols, clim_kpis):
-        with col:
-            render_kpi_card(kpi)
+    col1, col2, col3, col4 = st.columns(4)
 
-    df_co2pc  = all_series.get("EN.ATM.CO2E.PC",    pd.DataFrame())
-    df_co2kt  = all_series.get("EN.ATM.CO2E.KT",    pd.DataFrame())
-    df_forest = all_series.get("AG.LND.FRST.ZS",    pd.DataFrame())
-    df_renew  = all_series.get("EG.ELC.RNEW.ZS",    pd.DataFrame())
-
-    col1, col2 = st.columns(2)
     with col1:
-        if not df_co2pc.empty:
-            fig = make_line_chart(
-                {"EN.ATM.CO2E.PC": df_co2pc},
-                {"EN.ATM.CO2E.PC": "CO₂ / habitant (t)"},
-                fill=True, y_suffix=" t",
-            )
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-            st.caption("*Banque Mondiale — EN.ATM.CO2E.PC*")
-        else:
-            no_data_placeholder("CO₂ / habitant")
+        st.metric("ND-GAIN", ndgain_score if ndgain_score else "N/D")
+
     with col2:
-        if not df_forest.empty:
-            fig = make_line_chart(
-                {"AG.LND.FRST.ZS": df_forest},
-                {"AG.LND.FRST.ZS": "Couverture forestière (%)"},
-                fill=True, y_suffix="%",
-            )
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-            st.caption("*Banque Mondiale — AG.LND.FRST.ZS*")
-        else:
-            no_data_placeholder("Couverture forestière")
-
-    # ── SECTION 2 : CLIMATE WATCH — Émissions GES ────────────────────────────
-    st.markdown('<div class="sub-label">🌡️ Émissions de gaz à effet de serre — Climate Watch (CAIT)</div>', unsafe_allow_html=True)
-
-    col3, col4 = st.columns(2)
+        st.metric("CO₂ énergie", co2_energy if co2_energy else "N/D")
 
     with col3:
-        # Série temporelle émissions totales GES
-        cw_series = cw_tot.get("series", [])
-        if cw_series:
-            df_cw = pd.DataFrame(cw_series).dropna(subset=["value"])
-            fig = go.Figure(go.Scatter(
-                x=df_cw["year"], y=df_cw["value"],
-                fill="tozeroy",
-                line=dict(color=COLORS["orange"], width=2),
-                fillcolor="rgba(192,98,10,0.1)",
-                name="GES totaux (MtCO₂eq)",
-                hovertemplate="<b>%{y:.2f} MtCO₂eq</b><br>%{x}<extra></extra>",
-            ))
-            fig.update_layout(
-                paper_bgcolor="white", plot_bgcolor="white",
-                font=dict(size=11, color="#4a4843"),
-                margin=dict(l=10, r=10, t=30, b=40),
-                height=280,
-                xaxis=dict(gridcolor="#e8e6e2"),
-                yaxis=dict(gridcolor="#e8e6e2", ticksuffix=" Mt"),
-                title=dict(text="Émissions GES totales (MtCO₂eq)", font=dict(size=12), x=0),
-            )
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-            st.caption(f"*{cw_tot.get('source', 'Climate Watch — CAIT')} · [{cw_tot.get('source_url', '')}]({cw_tot.get('source_url', '')})*")
-        elif not df_co2kt.empty:
-            # Fallback Banque Mondiale si CW indisponible
-            df_co2mt = df_co2kt.copy()
-            df_co2mt["value"] = df_co2mt["value"] / 1000
-            fig = make_bar_chart(df_co2mt, "EN.ATM.CO2E.KT", "CO₂ total (Mt)", y_suffix=" Mt", color=COLORS["orange"])
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-            st.caption("*Banque Mondiale — EN.ATM.CO2E.KT (fallback)*")
-        else:
-            no_data_placeholder("Émissions GES Climate Watch")
+        st.metric("Renouvelables (%)", renewable if renewable else "N/D")
 
     with col4:
-        # Émissions par secteur (donut)
-        if cw_sec:
-            labels_sec = [s["sector"] for s in cw_sec]
-            values_sec = [s["value"] for s in cw_sec]
-            yr_sec = cw_sec[0].get("year", "") if cw_sec else ""
-            palette = [COLORS["blue"], COLORS["orange"], COLORS["green"],
-                       COLORS["red"], COLORS["gold"], COLORS["teal"]]
-            fig = go.Figure(go.Pie(
-                labels=labels_sec, values=values_sec,
-                hole=0.42,
-                marker=dict(colors=palette[:len(labels_sec)], line=dict(color="white", width=2)),
-                textinfo="label+percent",
-                textfont=dict(size=10),
-                hovertemplate="<b>%{label}</b><br>%{value:.2f} MtCO₂eq<br>%{percent}<extra></extra>",
-            ))
-            fig.update_layout(
-                paper_bgcolor="white",
-                font=dict(size=10, color="#4a4843"),
-                margin=dict(l=10, r=10, t=30, b=10),
-                height=280,
-                showlegend=False,
-                title=dict(text=f"GES par secteur ({yr_sec})", font=dict(size=12), x=0),
-            )
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-            st.caption(f"*Climate Watch — CAIT · [climatewatchdata.org](https://www.climatewatchdata.org/countries/{country_code})*")
-        else:
-            # Afficher les engagements NDC à la place
-            ndc = cw_ndc
-            st.markdown(f"""
-            <div class="overview-ribbon">
-                <strong>Engagements NDC — {selected_name}</strong><br>
-                Données de répartition sectorielle non disponibles via l'API Climate Watch pour ce pays.<br>
-                <a href="{ndc.get('source_url', 'https://www.climatewatchdata.org/')}" target="_blank">
-                → Consulter le profil complet sur Climate Watch
-                </a>
-            </div>
-            """, unsafe_allow_html=True)
+        st.metric("GES totales", ges_value if ges_value else "N/D")
 
-    # ── Engagements NDC ────────────────────────────────────────────────────────
-    if cw_ndc.get("unconditional_target") or cw_ndc.get("conditional_target"):
-        st.markdown('<div class="sub-label">Engagements climatiques NDC — Climate Watch</div>', unsafe_allow_html=True)
-        col_ndc1, col_ndc2 = st.columns(2)
-        with col_ndc1:
-            if cw_ndc.get("unconditional_target"):
-                st.markdown(f"""
-                <div class="overview-ribbon" style="border-left-color:#2e7d4f">
-                    <strong>🎯 Objectif inconditionnel (NDC)</strong><br>
-                    {cw_ndc['unconditional_target']}
-                </div>
-                """, unsafe_allow_html=True)
-        with col_ndc2:
-            if cw_ndc.get("conditional_target"):
-                st.markdown(f"""
-                <div class="overview-ribbon" style="border-left-color:#2563a8">
-                    <strong>🎯 Objectif conditionnel (NDC)</strong><br>
-                    {cw_ndc['conditional_target']}
-                </div>
-                """, unsafe_allow_html=True)
+    # ─────────────────────────────────────────────────────────────
+    # GRAPHIQUE ÉMISSIONS (série temporelle)
+    # ─────────────────────────────────────────────────────────────
+    st.markdown('<div class="sub-label">Émissions GES (série historique)</div>', unsafe_allow_html=True)
 
-    # ── SECTION 3 : ND-GAIN — Vulnérabilité & Adaptation ─────────────────────
-    st.markdown('<div class="sub-label">🛡️ Vulnérabilité climatique & Capacité d\'adaptation — ND-GAIN Index</div>', unsafe_allow_html=True)
+    series = cw_tot.get("series", [])
 
-    col5, col6 = st.columns(2)
+    if series:
+        df = pd.DataFrame(series)
 
-    with col5:
-        # Score ND-GAIN global historique
-        ndg_series = ndgain.get("series_overall", [])
-        vuln_series = ndgain.get("series_vulnerability", [])
-        read_series = ndgain.get("series_readiness", [])
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df["year"],
+            y=df["value"],
+            mode="lines+markers",
+            name="GES",
+        ))
 
-        if ndg_series:
-            fig = go.Figure()
-            df_ndg = pd.DataFrame(ndg_series)
-            fig.add_trace(go.Scatter(
-                x=df_ndg["year"], y=df_ndg["value"],
-                name="Score ND-GAIN global",
-                line=dict(color=COLORS["blue"], width=2.5),
-                fill="tozeroy", fillcolor="rgba(37,99,168,0.07)",
-                hovertemplate="<b>%{y:.1f}/100</b><br>%{x}<extra>ND-GAIN Global</extra>",
-            ))
-            if read_series:
-                df_read = pd.DataFrame(read_series)
-                fig.add_trace(go.Scatter(
-                    x=df_read["year"], y=df_read["value"] * 100,
-                    name="Readiness (×100)",
-                    line=dict(color=COLORS["green"], width=1.5, dash="dot"),
-                    hovertemplate="<b>%{y:.1f}</b><br>%{x}<extra>Readiness ×100</extra>",
-                ))
-            fig.update_layout(
-                paper_bgcolor="white", plot_bgcolor="white",
-                font=dict(size=11, color="#4a4843"),
-                legend=dict(orientation="h", yanchor="bottom", y=-0.35, x=0),
-                margin=dict(l=10, r=10, t=30, b=65),
-                height=280,
-                hovermode="x unified",
-                xaxis=dict(gridcolor="#e8e6e2"),
-                yaxis=dict(gridcolor="#e8e6e2"),
-                title=dict(text="Score ND-GAIN (0–100) — tendance historique", font=dict(size=12), x=0),
-            )
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-            st.caption(f"*{ndgain.get('source', 'ND-GAIN')} · [gain-new.crc.nd.edu](https://gain-new.crc.nd.edu/country/timor-leste)*")
-        else:
-            # KPIs ND-GAIN en fallback
-            col_ng1, col_ng2, col_ng3 = st.columns(3)
-            with col_ng1:
-                score_str = f"{ndgain['score']:.1f}/100" if ndgain.get("score") else "N/D"
-                st.markdown(f"""<div class="kpi-card"><div class="kpi-label">Score ND-GAIN ({ndgain.get('year','—')})</div>
-                <div class="kpi-value">{score_str}</div></div>""", unsafe_allow_html=True)
-            with col_ng2:
-                rank_str = f"{ndgain['rank']}/185" if ndgain.get("rank") else "N/D"
-                st.markdown(f"""<div class="kpi-card"><div class="kpi-label">Rang mondial</div>
-                <div class="kpi-value">{rank_str}</div></div>""", unsafe_allow_html=True)
-            with col_ng3:
-                vuln_str = f"{ndgain['vulnerability']:.3f}" if ndgain.get("vulnerability") else "N/D"
-                st.markdown(f"""<div class="kpi-card"><div class="kpi-label">Score vulnérabilité</div>
-                <div class="kpi-value">{vuln_str}</div></div>""", unsafe_allow_html=True)
+        fig.update_layout(
+            height=300,
+            margin=dict(l=10, r=10, t=20, b=40),
+        )
 
-    with col6:
-        # Radar sous-scores vulnérabilité
-        vuln_comp = ndgain.get("vulnerability_components", {})
-        read_comp = ndgain.get("readiness_components", {})
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("📭 Pas de données émissions disponibles")
 
-        if vuln_comp:
-            cats = list(vuln_comp.keys())
-            vals = [vuln_comp[c] for c in cats]
-            vals_closed = vals + [vals[0]]
-            cats_closed = cats + [cats[0]]
-            fig = go.Figure()
-            fig.add_trace(go.Scatterpolar(
-                r=vals_closed, theta=cats_closed,
-                fill="toself",
-                fillcolor="rgba(192,57,43,0.12)",
-                line=dict(color=COLORS["red"], width=2),
-                name="Vulnérabilité (0–1)",
-            ))
-            if read_comp:
-                # Représenter readiness sur les 3 premières dimensions
-                r_cats = list(read_comp.keys())
-                r_vals = [read_comp[c] for c in r_cats]
-                # Aligner sur les cats vulnérabilité (3 premières)
-                r_vals_full = r_vals[:3] + [None] * (len(cats) - len(r_vals[:3]))
-                r_closed = r_vals_full + [r_vals_full[0]]
-                r_cats_c = cats_closed
-                fig.add_trace(go.Scatterpolar(
-                    r=r_closed, theta=r_cats_c,
-                    fill="toself",
-                    fillcolor="rgba(46,125,79,0.08)",
-                    line=dict(color=COLORS["green"], width=1.5, dash="dot"),
-                    name="Readiness (partiel)",
-                ))
-            fig.update_layout(
-                polar=dict(
-                    radialaxis=dict(visible=True, range=[0, 1], gridcolor="#e8e6e2"),
-                    angularaxis=dict(gridcolor="#e8e6e2"),
-                    bgcolor="white",
-                ),
-                paper_bgcolor="white",
-                font=dict(size=10, color="#4a4843"),
-                legend=dict(orientation="h", yanchor="bottom", y=-0.15, x=0),
-                margin=dict(l=30, r=30, t=40, b=50),
-                height=280,
-                title=dict(text="Composantes vulnérabilité & readiness ND-GAIN", font=dict(size=12), x=0),
-            )
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-            st.caption(f"*{ndgain.get('source', 'ND-GAIN')} · Scores normalisés 0–1*")
-        else:
-            st.info("📭 Données de décomposition ND-GAIN non disponibles pour ce pays.")
+    # ─────────────────────────────────────────────────────────────
+    # RÉPARTITION PAR SECTEUR
+    # ─────────────────────────────────────────────────────────────
+    st.markdown('<div class="sub-label">Répartition des émissions par secteur</div>', unsafe_allow_html=True)
 
-    # ── SECTION 4 : IEA — Mix énergétique & transition ───────────────────────
-    st.markdown('<div class="sub-label">⚡ Mix énergétique & transition — IEA World Energy Balances</div>', unsafe_allow_html=True)
+    if cw_sec:
+        df_sec = pd.DataFrame(cw_sec)
 
-    col7, col8 = st.columns(2)
+        fig = px.pie(
+            df_sec,
+            values="value",
+            names="sector",
+        )
 
-    with col7:
-        # Donut mix électrique
-        mix = iea.get("mix_electricity", {})
-        if mix:
-            labels_mix = list(mix.keys())
-            values_mix = list(mix.values())
-            colors_mix = [COLORS["red"], COLORS["gold"], COLORS["blue"],
-                          COLORS["green"], COLORS["teal"], COLORS["orange"]]
-            fig = go.Figure(go.Pie(
-                labels=labels_mix, values=values_mix,
-                hole=0.42,
-                marker=dict(colors=colors_mix[:len(labels_mix)], line=dict(color="white", width=2)),
-                textinfo="label+percent",
-                textfont=dict(size=10),
-                hovertemplate="<b>%{label}</b><br>%{value:.1f}%<extra></extra>",
-            ))
-            fig.update_layout(
-                paper_bgcolor="white",
-                font=dict(size=10, color="#4a4843"),
-                margin=dict(l=10, r=10, t=30, b=10),
-                height=280,
-                showlegend=False,
-                title=dict(text=f"Mix de production électrique ({iea.get('year', '')})", font=dict(size=12), x=0),
-            )
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-            st.caption(f"*{iea.get('source', 'IEA')} · [iea.org](https://www.iea.org/countries/timor-leste)*")
-        else:
-            # Fallback série Banque Mondiale renouvelables
-            df_renew = all_series.get("EG.ELC.RNEW.ZS", pd.DataFrame())
-            if not df_renew.empty:
-                fig = make_line_chart(
-                    {"EG.ELC.RNEW.ZS": df_renew},
-                    {"EG.ELC.RNEW.ZS": "Part renouvelables (%)"},
-                    fill=True, y_suffix="%",
-                )
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-                st.caption("*Banque Mondiale — EG.ELC.RNEW.ZS (fallback)*")
-            else:
-                no_data_placeholder("Mix électrique IEA")
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("📭 Pas de données sectorielles")
 
-    with col8:
-        # Évolution de la part renouvelable (IEA) vs émissions énergie
-        iea_renew = iea.get("series_renewable", [])
-        iea_co2e  = iea.get("series_co2_energy", [])
+    # ─────────────────────────────────────────────────────────────
+    # NDC
+    # ─────────────────────────────────────────────────────────────
+    st.markdown('<div class="sub-label">Engagements climatiques (NDC)</div>', unsafe_allow_html=True)
 
-        if iea_renew or iea_co2e:
-            fig = go.Figure()
-            if iea_renew:
-                df_ir = pd.DataFrame(iea_renew)
-                fig.add_trace(go.Scatter(
-                    x=df_ir["year"], y=df_ir["value"],
-                    name="Renouvelables (% mix élec.)",
-                    line=dict(color=COLORS["green"], width=2),
-                    yaxis="y1",
-                    hovertemplate="<b>%{y:.1f}%</b><br>%{x}<extra>Renouvelables</extra>",
-                ))
-            if iea_co2e:
-                df_ic = pd.DataFrame(iea_co2e)
-                fig.add_trace(go.Scatter(
-                    x=df_ic["year"], y=df_ic["value"],
-                    name="CO₂ énergie (Mt)",
-                    line=dict(color=COLORS["orange"], width=2, dash="dot"),
-                    yaxis="y2",
-                    hovertemplate="<b>%{y:.2f} Mt</b><br>%{x}<extra>CO₂ énergie</extra>",
-                ))
-            fig.update_layout(
-                paper_bgcolor="white", plot_bgcolor="white",
-                font=dict(size=11, color="#4a4843"),
-                legend=dict(orientation="h", yanchor="bottom", y=-0.35, x=0),
-                margin=dict(l=10, r=55, t=30, b=65),
-                height=280,
-                hovermode="x unified",
-                xaxis=dict(gridcolor="#e8e6e2"),
-                yaxis=dict(gridcolor="#e8e6e2", ticksuffix="%", title="% renouvelable"),
-                yaxis2=dict(overlaying="y", side="right", showgrid=False,
-                            ticksuffix=" Mt", title="CO₂ énergie"),
-                title=dict(text="Transition énergétique — tendance", font=dict(size=12), x=0),
-            )
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-            st.caption(f"*{iea.get('source', 'IEA')} · [iea.org](https://www.iea.org/countries/timor-leste)*")
-        else:
-            no_data_placeholder("Transition énergétique IEA")
+    if cw_ndc.get("unconditional_target"):
+        st.write("**Objectif non conditionnel :**")
+        st.write(cw_ndc["unconditional_target"])
 
-    # ── KPIs IEA complémentaires ───────────────────────────────────────────────
-    if any([iea.get("renewable_share"), iea.get("co2_energy_mt"),
-            iea.get("total_supply_mtoe"), iea.get("electricity_access")]):
-        st.markdown('<div class="sub-label">Indicateurs IEA clés</div>', unsafe_allow_html=True)
-        iea_kpi_data = [
-            ("Part renouvelables", f"{iea['renewable_share']:.1f}%" if iea.get("renewable_share") else "N/D",
-             f"Mix électrique {iea.get('year', '')}"),
-            ("CO₂ lié à l'énergie", f"{iea['co2_energy_mt']:.2f} Mt" if iea.get("co2_energy_mt") else "N/D",
-             f"Émissions secteur énergie {iea.get('year', '')}"),
-            ("Approvisionnement énergie", f"{iea['total_supply_mtoe']:.2f} Mtep" if iea.get("total_supply_mtoe") else "N/D",
-             "Total primary energy supply"),
-            ("Accès électricité", f"{iea['electricity_access']:.1f}%" if iea.get("electricity_access") else "N/D",
-             "Population avec accès"),
-        ]
-        iea_cols = st.columns(4)
-        for col, (lbl, val, sub) in zip(iea_cols, iea_kpi_data):
-            with col:
-                st.markdown(f"""
-                <div class="kpi-card">
-                    <div class="kpi-label">{lbl}</div>
-                    <div class="kpi-value" style="font-size:1.5rem">{val}</div>
-                    <div class="kpi-unit">{sub}</div>
-                    <div class="kpi-source"><a href="{iea.get('source_url','https://www.iea.org')}" target="_blank">{iea.get('source','IEA')}</a></div>
-                </div>
-                """, unsafe_allow_html=True)
+    if cw_ndc.get("conditional_target"):
+        st.write("**Objectif conditionnel :**")
+        st.write(cw_ndc["conditional_target"])
 
+    if not cw_ndc.get("unconditional_target") and not cw_ndc.get("conditional_target"):
+        st.info("📭 Informations NDC indisponibles")
 
 
 
