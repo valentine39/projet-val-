@@ -793,7 +793,7 @@ elif active_pilier == 5:
 # ─────────────────────────────────────────────────────────────────────────────
 
 elif active_pilier == 6:
-    from scrapers.climat_scraper import fetch_ndgain, fetch_iea, fetch_cw_emissions, fetch_cw_emissions_by_sector, fetch_cw_ndc
+    from scrapers.climat_scraper import fetch_all_climate_data
 
     pm = PILIER_META[6]
     st.markdown(f"### {pm['icon']} Pilier 6 — {pm['label']}")
@@ -801,14 +801,8 @@ elif active_pilier == 6:
 
     # ── Chargement des données spécialisées (avec cache) ──────────────────────
     @st.cache_data(ttl=86400, show_spinner=False)
-    def load_climate_data(cc: str) -> dict:
-        return {
-            "ndgain":       fetch_ndgain(cc),
-            "iea":          fetch_iea(cc[:2].upper() if len(cc) == 3 else cc, cc),
-            "cw_total":     fetch_cw_emissions(cc),
-            "cw_sectors":   fetch_cw_emissions_by_sector(cc),
-            "cw_ndc":       fetch_cw_ndc(cc),
-        }
+def load_climate_data(cc: str) -> dict:
+    return fetch_all_climate_data(cc)
 
     with st.spinner("Chargement des données climatiques spécialisées…"):
         clim = load_climate_data(country_code)
