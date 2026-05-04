@@ -220,8 +220,95 @@ PILIER_META = {
         "description": "Population, développement humain, gouvernance, emploi"},
     2: {"icon": "📈", "label": "Modèle de Croissance",
         "description": "Structure du PIB, secteurs porteurs, dynamique de croissance"},
-    3: {"icon": "🏦", "label": "Finances Publiques",
+    3: {"icon": "💰", "label": "Finances Publiques",
         "description": "Solde budgétaire, dette, inflation, politique fiscale"},
-    4: {"icon": "🌐", "label": "Équilibres Externes",
+    4: {"icon": "⚖️", "label": "Équilibres Externes",
         "description": "Balance courante, commerce extérieur, IDE"},
+    5: {"icon": "🏦", "label": "Système Financier & Politique Monétaire",
+        "description": "Secteur bancaire, inclusion financière, crédit privé"},
+    6: {"icon": "🌿", "label": "Risques Climat & Nature",
+        "description": "Vulnérabilité climatique, émissions CO₂, forêts, énergie"},
 }
+
+# ── Indicateurs Pilier 5 & 6 (ajoutés à INDICATORS) ─────────────────────────
+INDICATORS_P5 = {
+    "FD.AST.PRVT.GD.ZS": {
+        "label": "Crédit privé / PIB",
+        "unit": "% du PIB",
+        "unit_display": "% PIB",
+        "scale": 1, "format": ".1f", "pilier": 5,
+        "description": "Crédit intérieur au secteur privé (% du PIB)",
+        "source": WB_SOURCE_LABEL,
+        "source_url": WB_SOURCE_URL.format(code="FD.AST.PRVT.GD.ZS"),
+    },
+    "FB.BNK.CAPA.ZS": {
+        "label": "Ratio fonds propres bancaires",
+        "unit": "% actifs pondérés",
+        "unit_display": "%",
+        "scale": 1, "format": ".1f", "pilier": 5,
+        "description": "Ratio de fonds propres réglementaires sur actifs pondérés du risque",
+        "source": WB_SOURCE_LABEL,
+        "source_url": WB_SOURCE_URL.format(code="FB.BNK.CAPA.ZS"),
+    },
+    "FX.OWN.TOTL.ZS": {
+        "label": "Inclusion financière — compte bancaire",
+        "unit": "% adultes (15+)",
+        "unit_display": "%",
+        "scale": 1, "format": ".1f", "pilier": 5,
+        "description": "Part des adultes (15+) possédant un compte dans une institution financière",
+        "source": WB_SOURCE_LABEL,
+        "source_url": WB_SOURCE_URL.format(code="FX.OWN.TOTL.ZS"),
+    },
+}
+
+INDICATORS_P6 = {
+    "EN.ATM.CO2E.PC": {
+        "label": "Émissions CO₂ par habitant",
+        "unit": "tonnes / habitant",
+        "unit_display": "t CO₂/hab.",
+        "scale": 1, "format": ".2f", "pilier": 6,
+        "description": "Émissions de CO₂ par habitant (tonnes métriques)",
+        "source": WB_SOURCE_LABEL,
+        "source_url": WB_SOURCE_URL.format(code="EN.ATM.CO2E.PC"),
+    },
+    "AG.LND.FRST.ZS": {
+        "label": "Couverture forestière",
+        "unit": "% du territoire",
+        "unit_display": "%",
+        "scale": 1, "format": ".1f", "pilier": 6,
+        "description": "Superficie des forêts en pourcentage du territoire total",
+        "source": WB_SOURCE_LABEL,
+        "source_url": WB_SOURCE_URL.format(code="AG.LND.FRST.ZS"),
+    },
+    "EG.ELC.RNEW.ZS": {
+        "label": "Électricité renouvelable",
+        "unit": "% de la production totale",
+        "unit_display": "%",
+        "scale": 1, "format": ".1f", "pilier": 6,
+        "description": "Part des énergies renouvelables dans la production d'électricité",
+        "source": WB_SOURCE_LABEL,
+        "source_url": WB_SOURCE_URL.format(code="EG.ELC.RNEW.ZS"),
+    },
+    "ER.LND.PTLD.ZS": {
+        "label": "Aires terrestres protégées",
+        "unit": "% du territoire",
+        "unit_display": "%",
+        "scale": 1, "format": ".1f", "pilier": 6,
+        "description": "Superficie des aires terrestres protégées (% du territoire total)",
+        "source": WB_SOURCE_LABEL,
+        "source_url": WB_SOURCE_URL.format(code="ER.LND.PTLD.ZS"),
+    },
+    "EN.ATM.CO2E.KT": {
+        "label": "Émissions CO₂ totales",
+        "unit": "kt CO₂",
+        "unit_display": "kt",
+        "scale": 1, "format": ",.0f", "pilier": 6,
+        "description": "Émissions totales de CO₂ (kilotonnes)",
+        "source": WB_SOURCE_LABEL,
+        "source_url": WB_SOURCE_URL.format(code="EN.ATM.CO2E.KT"),
+    },
+}
+
+# Fusionner dans INDICATORS
+INDICATORS.update(INDICATORS_P5)
+INDICATORS.update(INDICATORS_P6)
