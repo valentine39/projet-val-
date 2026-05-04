@@ -1,4 +1,4 @@
-j'ai ce scrapper qui marche bien pour le timor leste. Comment je peux l'étendre à tous les pays : # ── scrapers/climat_scraper.py ───────────────────────────────────────────────
+# ── scrapers/climat_scraper.py ───────────────────────────────────────────────
 # Scraper pour les données climatiques spécialisées :
 #   - Climate Watch (CAIT) → émissions GES par secteur / gaz
 #   - ND-GAIN Index        → scores vulnérabilité & adaptation
